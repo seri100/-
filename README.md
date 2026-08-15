@@ -12,10 +12,11 @@
   - (참고용으로 남겨둔) Task CRUD API 예시: `/api-docs`
 
 ## URLs
-- **로컬 미리보기**: http://localhost:3000 (GetServiceUrl로 공개 URL 발급 가능)
-- **메인 대시보드**: `/`
+- **배포 URL (프로덕션)**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com
+- **메인 대시보드**: `/` (위 URL 그대로 접속)
 - **Task API 예시 문서** (이전 튜토리얼 예제, 유지됨): `/api-docs`
 - **입찰 관리 API Base**: `/api/bids`
+- **로컬 개발 미리보기**: http://localhost:3000
 
 ## API 엔드포인트
 
@@ -108,25 +109,26 @@ gongo/물품_YYYYMMDD.csv
 - 구글 캘린더 동기화(`gcal_sync.py`, 09:00/15:00 실행)는 **완전히 그대로 유지**됩니다. 이 앱은 캘린더를 읽거나 쓰지 않습니다.
 - `sync_bids_to_cloudflare.py`는 `gongo/*.csv`를 **읽기만** 하며, 기존 파일을 수정하지 않습니다.
 
-## 라즈베리파이 설정 방법 (배포 후 진행)
+## 라즈베리파이 설정 방법 (배포 완료, 아래만 진행하면 됨)
 
-1. **Cloudflare Worker에 API Key 등록** (배포 담당자가 1회 실행):
-   ```bash
-   npx wrangler pages secret put IMPORT_API_KEY --project-name <cloudflare_project_name>
-   ```
-2. **라즈베리파이에 동기화 스크립트 복사**:
+배포 및 `IMPORT_API_KEY` 시크릿 등록이 완료된 상태입니다. 라즈베리파이에서 아래만 진행하면 됩니다.
+
+1. **라즈베리파이에 동기화 스크립트 복사**:
    ```bash
    scp scripts/sync_bids_to_cloudflare.py pi@<라즈베리파이IP>:/home/pi/gongo/
    ```
-3. **환경변수 설정 후 1회 수동 테스트**:
+2. **1회 수동 테스트** (아래 `<IMPORT_API_KEY 값>`은 대화방/문서 등 안전한 채널로 별도 전달받은 값을 사용):
    ```bash
-   BID_API_BASE=https://<배포된-URL> BID_API_KEY=<위에서 등록한 키> \
+   BID_API_BASE=https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com \
+   BID_API_KEY=<IMPORT_API_KEY 값> \
      python3 /home/pi/gongo/sync_bids_to_cloudflare.py
    ```
-4. **crontab에 한 줄 추가** (기존 `bid_collector.py`가 08:00/14:00에 도는 것을 감안해 10분 뒤로 설정):
+3. **crontab에 한 줄 추가** (기존 `bid_collector.py`가 08:00/14:00에 도는 것을 감안해 10분 뒤로 설정):
    ```
-   10 8,14 * * * BID_API_BASE=https://<배포된-URL> BID_API_KEY=<키> /usr/bin/python3 /home/pi/gongo/sync_bids_to_cloudflare.py >> /home/pi/n_data/logs/bid_sync.log 2>&1
+   10 8,14 * * * BID_API_BASE=https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com BID_API_KEY=<IMPORT_API_KEY 값> /usr/bin/python3 /home/pi/gongo/sync_bids_to_cloudflare.py >> /home/pi/n_data/logs/bid_sync.log 2>&1
    ```
+
+> 🔑 `IMPORT_API_KEY` 값은 보안상 이 문서에 평문으로 남기지 않았습니다. Cloudflare Worker 시크릿은 **쓰기 전용**이라 나중에 다시 조회할 수 없으니, 채팅으로 전달받은 값을 라즈베리파이의 crontab 또는 `/home/pi/gongo/.env_bid_sync` 같은 별도 파일에 안전하게 보관해두세요. 분실 시 `gsk hosted secret_put`으로 새 값을 재등록하고 라즈베리파이 쪽 값도 함께 갱신하면 됩니다.
 
 자세한 옵션은 스크립트 상단 docstring(`scripts/sync_bids_to_cloudflare.py`) 참고.
 
@@ -144,13 +146,13 @@ gongo/물품_YYYYMMDD.csv
 - `main_send.py`/`gcal_sync.py`가 이미 하는 지역·공종 필터와 이 앱의 필터 기준이 완전히 동일한지는 실제 데이터로 추가 검증 필요
 
 ## Next Steps
-- 프로덕션 D1 데이터베이스 생성 및 `wrangler.jsonc`의 `database_id` 교체 후 배포
-- `IMPORT_API_KEY`를 `wrangler pages secret put`으로 프로덕션에 등록
-- 라즈베리파이에 `sync_bids_to_cloudflare.py` 설치 + crontab 등록
+- 라즈베리파이에 `sync_bids_to_cloudflare.py` 설치 + crontab 등록 (위 안내 참고)
 - 실사용 1~2주 후, 상태 변경 이력 로그·간단 인증 추가 여부 재검토
+- (선택) 조회/수정 API에 대한 접근 제한 필요 시 Genspark Hosted Access Rules 적용 검토
 
 ## Deployment
-- **Platform**: Cloudflare Pages
+- **Platform**: Cloudflare Pages (Genspark 관리형 계정, Workers for Platform)
 - **Tech Stack**: Hono + TypeScript + Cloudflare D1 + TailwindCSS(CDN)
-- **Status**: 로컬 개발/테스트 완료, 배포 대기
+- **Status**: ✅ 배포 완료 (D1 마이그레이션 수동 적용 후 정상 동작 검증됨)
+- **배포 URL**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com
 - **Last Updated**: 2026-08-15
