@@ -80,11 +80,26 @@ def csv_category_from_filename(path: str) -> str:
     return "기타"
 
 
+def normalize_bid_ord(raw: str) -> str:
+    """
+    차수 값을 3자리 0-패딩 문자열로 정규화한다.
+    같은 공고가 원본 CSV에서 수집 시점에 따라 "1", "001"처럼
+    다른 포맷으로 내려오는 경우가 있어(나라장터 API 특성),
+    이를 통일하지 않으면 (bid_no, bid_ord) PK 기준으로 중복 저장된다.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return "000"
+    if raw.isdigit():
+        return raw.zfill(3)
+    return raw
+
+
 def row_to_bid_item(row: dict, category: str) -> dict:
     """gongo CSV의 한 행 -> Cloudflare bids 테이블 컬럼으로 매핑"""
     return {
         "bid_no": (row.get("입찰공고번호") or "").strip(),
-        "bid_ord": (row.get("차수") or "00").strip() or "00",
+        "bid_ord": normalize_bid_ord(row.get("차수")),
         "category": category,
         "title": row.get("입찰공고명"),
         "agency": row.get("공고기관명"),
