@@ -11,13 +11,11 @@
   - "입찰개시일"(입찰서접수개시일시) 컬럼 표시
   - 라즈베리파이 → Cloudflare 간 데이터 업로드용 REST API 및 동기화 스크립트 제공
   - **[신규] 구글 캘린더 기준 별도 대시보드 (`/gcal`)**: 라즈베리파이 CSV를 거치지 않고 Cloudflare Worker가 Google Calendar API를 직접 호출해 입찰개시 이벤트를 가져와, 동일한 상태/담당자/메모 관리 기능을 제공. 기존 대시보드(`/`)와 완전히 독립된 데이터/테이블 사용
-  - (참고용으로 남겨둔) Task CRUD API 예시: `/api-docs`
 
 ## URLs
 - **배포 URL (프로덕션)**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com
 - **메인 대시보드 (라즈베리파이 기준)**: `/` (위 URL 그대로 접속)
 - **구글 캘린더 기준 대시보드 (신규)**: `/gcal`
-- **Task API 예시 문서** (이전 튜토리얼 예제, 유지됨): `/api-docs`
 - **입찰 관리 API Base (라즈베리파이 기준)**: `/api/bids`
 - **입찰 관리 API Base (구글 캘린더 기준, 신규)**: `/api/gcal-bids`
 - **로컬 개발 미리보기**: http://localhost:3000
@@ -84,11 +82,6 @@ curl -X PUT http://localhost:3000/api/gcal-bids/<event_id>/status \
   -d '{"status":"제출완료","assignee":"홍길동","memo":"서류 제출 완료"}'
 ```
 
-### Task API 예시 (참고용, `/api-docs`에서 유지)
-| Method | Path | 설명 |
-|--------|------|------|
-| GET/POST/PUT/DELETE | `/api/tasks(/:id)` | 이전 튜토리얼에서 만든 CRUD 예제. 신규 개발과 무관, 학습용으로 남겨둠 |
-
 ## Data Architecture
 
 ### `bids` 테이블 — 나라장터 원본 미러
@@ -143,7 +136,7 @@ Primary Key는 구글 캘린더 이벤트 id(`event_id`) 그대로 사용합니�
 | updated_by, updated_at | 마지막 수정자/수정시각 |
 
 - **Storage**: Cloudflare D1 (로컬 개발 시 `.wrangler/state/v3/d1` 로컬 SQLite)
-- **Migrations**: `migrations/0001_initial_schema.sql`(Task 예제), `migrations/0002_bid_management.sql`(입찰 관리), `migrations/0003_add_bid_open_date.sql`(입찰개시일 컬럼), `migrations/0004_gcal_bids.sql`(구글 캘린더 대시보드용 신규 테이블)
+- **Migrations**: `migrations/0001_initial_schema.sql`(초기 예제, 더 이상 사용하지 않음 - `backup/legacy-task-api-example/` 참고), `migrations/0002_bid_management.sql`(입찰 관리), `migrations/0003_add_bid_open_date.sql`(입찰개시일 컬럼), `migrations/0004_gcal_bids.sql`(구글 캘린더 대시보드용 신규 테이블)
 
 ## 데이터 흐름 (라즈베리파이 ↔ Cloudflare)
 

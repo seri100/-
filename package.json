@@ -9,8 +9,7 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:migrate:local": "wrangler d1 migrations apply webapp-production --local",
     "db:migrate:prod": "wrangler d1 migrations apply webapp-production",
-    "db:seed": "wrangler d1 execute webapp-production --local --file=./seed.sql",
-    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed",
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
     "db:console:local": "wrangler d1 execute webapp-production --local"
   },
   "dependencies": {

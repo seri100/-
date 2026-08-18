@@ -2,20 +2,11 @@ import { jsxRenderer } from 'hono/jsx-renderer'
 
 export const renderer = jsxRenderer(({ children }, c) => {
   const path = c.req.path
-  const isApiDocs = path === '/api-docs'
   const isGcal = path === '/gcal'
 
-  const title = isApiDocs
-    ? 'Task API 서버 예시'
-    : isGcal
-      ? '구글 캘린더 입찰 대시보드'
-      : '입찰 관리 대시보드'
+  const title = isGcal ? '구글 캘린더 입찰 대시보드' : '입찰 관리 대시보드'
 
-  const scriptSrc = isApiDocs
-    ? '/static/app.js'
-    : isGcal
-      ? '/static/gcal-app.js'
-      : '/static/bid-app.js'
+  const scriptSrc = isGcal ? '/static/gcal-app.js' : '/static/bid-app.js'
 
   return (
     <html lang="ko">
