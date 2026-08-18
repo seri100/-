@@ -37,6 +37,30 @@ function formatText(v) {
   return v
 }
 
+// 날짜/시각 문자열의 4자리 연도(20xx)를 2자리(xx)로 축약해 표시 폭을 줄인다.
+// 예: "2026-08-18 00:00:00" -> "26-08-18 00:00:00"
+function shortenYear(v) {
+  if (!v) return v
+  return String(v).replace(/\b20(\d{2})([-/])/g, '$1$2')
+}
+
+function formatDate(v) {
+  if (!v) return '-'
+  return shortenYear(v)
+}
+
+// 금액 문자열에서 숫자만 추출해 천원 단위로 환산 표시한다.
+// 예: "422,928,000원 (사억이천이백구십이만팔천원)" -> "422,928천원"
+function formatAmountThousand(v) {
+  if (!v) return '-'
+  const m = String(v).match(/[\d,]+/)
+  if (!m) return v
+  const num = parseInt(m[0].replace(/,/g, ''), 10)
+  if (Number.isNaN(num)) return v
+  const thousand = Math.round(num / 1000)
+  return thousand.toLocaleString('ko-KR') + '천원'
+}
+
 function shortIndustry(v) {
   if (!v) return '-'
   const s = String(v)
@@ -72,9 +96,9 @@ function renderRow(bid) {
       <span class="line-clamp-2" title="${escapeHtml(bid.participant_region)}">${escapeHtml(bid.participant_region)}</span>
     </td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.industry)}">${shortIndustry(bid.industry)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.base_amount)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${formatText(bid.bid_open_recv_date)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${formatText(bid.bid_deadline)}</td>
+    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.base_amount)}">${formatAmountThousand(bid.base_amount)}</td>
+    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_open_recv_date)}">${formatDate(bid.bid_open_recv_date)}</td>
+    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_deadline)}">${formatDate(bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
     <td class="py-2 px-3 max-w-[160px]">
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
