@@ -8,6 +8,8 @@ const filterStatusEl = document.getElementById('gcal-filter-status')
 const filterRegionEl = document.getElementById('gcal-filter-region')
 const filterIndustryEl = document.getElementById('gcal-filter-industry')
 const filterQEl = document.getElementById('gcal-filter-q')
+const filterDateFromEl = document.getElementById('gcal-filter-date-from')
+const filterDateToEl = document.getElementById('gcal-filter-date-to')
 const filterApplyBtn = document.getElementById('gcal-filter-apply-btn')
 const filterResetBtn = document.getElementById('gcal-filter-reset-btn')
 const syncBtn = document.getElementById('gcal-sync-btn')
@@ -91,6 +93,8 @@ function buildQuery() {
   if (filterStatusEl.value) params.set('status', filterStatusEl.value)
   if (filterRegionEl.value.trim()) params.set('region', filterRegionEl.value.trim())
   if (filterIndustryEl.value.trim()) params.set('industry', filterIndustryEl.value.trim())
+  if (filterDateFromEl.value) params.set('date_from', filterDateFromEl.value)
+  if (filterDateToEl.value) params.set('date_to', filterDateToEl.value)
   if (filterQEl.value.trim()) params.set('q', filterQEl.value.trim())
   return params.toString()
 }
@@ -104,7 +108,7 @@ async function loadBids() {
 
     listBodyEl.innerHTML = ''
     if (items.length === 0) {
-      listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다. (우측 상단 "캘린더 동기화" 버튼으로 먼저 불러오세요)</td></tr>'
+      listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다. (검색 조건을 바꿔보시거나, 데이터가 아직 없다면 우측 상단 "캘린더 동기화" 버튼을 눌러주세요)</td></tr>'
     } else {
       items.forEach((bid) => listBodyEl.appendChild(renderRow(bid)))
     }
@@ -171,6 +175,8 @@ filterResetBtn?.addEventListener('click', () => {
   filterStatusEl.value = ''
   filterRegionEl.value = ''
   filterIndustryEl.value = ''
+  filterDateFromEl.value = ''
+  filterDateToEl.value = ''
   filterQEl.value = ''
   loadBids()
 })

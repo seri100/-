@@ -8,6 +8,8 @@ const filterStatusEl = document.getElementById('filter-status')
 const filterRegionEl = document.getElementById('filter-region')
 const filterIndustryEl = document.getElementById('filter-industry')
 const filterQEl = document.getElementById('filter-q')
+const filterDateFromEl = document.getElementById('filter-date-from')
+const filterDateToEl = document.getElementById('filter-date-to')
 const filterApplyBtn = document.getElementById('filter-apply-btn')
 const filterResetBtn = document.getElementById('filter-reset-btn')
 
@@ -91,6 +93,8 @@ function buildQuery() {
   if (filterStatusEl.value) params.set('status', filterStatusEl.value)
   if (filterRegionEl.value.trim()) params.set('region', filterRegionEl.value.trim())
   if (filterIndustryEl.value.trim()) params.set('industry', filterIndustryEl.value.trim())
+  if (filterDateFromEl.value) params.set('date_from', filterDateFromEl.value)
+  if (filterDateToEl.value) params.set('date_to', filterDateToEl.value)
   if (filterQEl.value.trim()) params.set('q', filterQEl.value.trim())
   return params.toString()
 }
@@ -155,6 +159,8 @@ filterResetBtn?.addEventListener('click', () => {
   filterStatusEl.value = ''
   filterRegionEl.value = ''
   filterIndustryEl.value = ''
+  filterDateFromEl.value = ''
+  filterDateToEl.value = ''
   filterQEl.value = ''
   loadBids()
 })

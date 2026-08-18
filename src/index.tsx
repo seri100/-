@@ -116,7 +116,9 @@ app.get('/api/bids', async (c) => {
   const { env } = c
   const status = c.req.query('status')       // '검토중' | '제출완료'
   const region = c.req.query('region')
-  const industry = c.req.query('industry')
+  const industry = c.req.query('industry')   // '기계' | '소방' | '전기' (실제 컬럼값의 부분 키워드로 매칭)
+  const dateFrom = c.req.query('date_from')  // 'YYYY-MM-DD', 입찰마감일 기준
+  const dateTo = c.req.query('date_to')      // 'YYYY-MM-DD', 입찰마감일 기준
   const q = c.req.query('q')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
   const offset = parseInt(c.req.query('offset') ?? '0', 10) || 0
@@ -144,8 +146,18 @@ app.get('/api/bids', async (c) => {
     params.push(`%${region}%`)
   }
   if (industry) {
+    // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
+    // 드롭다운의 짧은 키워드(기계/소방/전기)를 그대로 부분일치시킨다.
     query += ` AND b.main_industry LIKE ?`
     params.push(`%${industry}%`)
+  }
+  if (dateFrom) {
+    query += ` AND substr(b.bid_deadline, 1, 10) >= ?`
+    params.push(dateFrom)
+  }
+  if (dateTo) {
+    query += ` AND substr(b.bid_deadline, 1, 10) <= ?`
+    params.push(dateTo)
   }
   if (q) {
     query += ` AND b.title LIKE ?`
@@ -271,7 +283,9 @@ app.get('/api/gcal-bids', async (c) => {
   const { env } = c
   const status = c.req.query('status')
   const region = c.req.query('region')
-  const industry = c.req.query('industry')
+  const industry = c.req.query('industry')   // '기계' | '소방' | '전기' (실제 컬럼값의 부분 키워드로 매칭)
+  const dateFrom = c.req.query('date_from')  // 'YYYY-MM-DD', 입찰마감일 기준
+  const dateTo = c.req.query('date_to')      // 'YYYY-MM-DD', 입찰마감일 기준
   const q = c.req.query('q')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
   const offset = parseInt(c.req.query('offset') ?? '0', 10) || 0
@@ -299,8 +313,18 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(`%${region}%`, `%${region}%`)
   }
   if (industry) {
+    // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
+    // 드롭다운의 짧은 키워드(기계/소방/전기)를 그대로 부분일치시킨다.
     query += ` AND b.industry LIKE ?`
     params.push(`%${industry}%`)
+  }
+  if (dateFrom) {
+    query += ` AND substr(b.bid_deadline, 1, 10) >= ?`
+    params.push(dateFrom)
+  }
+  if (dateTo) {
+    query += ` AND substr(b.bid_deadline, 1, 10) <= ?`
+    params.push(dateTo)
   }
   if (q) {
     query += ` AND b.title LIKE ?`
@@ -442,9 +466,18 @@ app.get('/', (c) => {
           <label class="block text-xs text-gray-500 mb-1">공종</label>
           <select id="filter-industry" class="border rounded px-2 py-1.5 text-sm">
             <option value="">전체</option>
-            <option value="기계설비">기계설비</option>
-            <option value="소방설비">소방설비</option>
+            <option value="기계">기계</option>
+            <option value="소방">소방</option>
+            <option value="전기">전기</option>
           </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">기간(마감일 기준)</label>
+          <div class="flex items-center gap-1">
+            <input id="filter-date-from" type="date" class="border rounded px-2 py-1.5 text-sm" />
+            <span class="text-gray-400">~</span>
+            <input id="filter-date-to" type="date" class="border rounded px-2 py-1.5 text-sm" />
+          </div>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
@@ -570,9 +603,18 @@ app.get('/gcal', (c) => {
           <label class="block text-xs text-gray-500 mb-1">공종</label>
           <select id="gcal-filter-industry" class="border rounded px-2 py-1.5 text-sm">
             <option value="">전체</option>
-            <option value="기계설비">기계설비</option>
-            <option value="소방설비">소방설비</option>
+            <option value="기계">기계</option>
+            <option value="소방">소방</option>
+            <option value="전기">전기</option>
           </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">기간(마감일 기준)</label>
+          <div class="flex items-center gap-1">
+            <input id="gcal-filter-date-from" type="date" class="border rounded px-2 py-1.5 text-sm" />
+            <span class="text-gray-400">~</span>
+            <input id="gcal-filter-date-to" type="date" class="border rounded px-2 py-1.5 text-sm" />
+          </div>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
