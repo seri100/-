@@ -380,7 +380,8 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     industry,
     task_type: extractField(description, '업무구분'),
     bid_method: extractField(description, '낙찰방법'),
-    base_amount: extractField(description, '기초금액'),
+    // "기초금액" 라벨이 기본이나, 일부 수동 등록 이벤트는 "추정금액"으로 표기하므로 폴백 처리
+    base_amount: extractField(description, '기초금액') || extractField(description, '추정금액'),
     pure_cost: extractField(description, '순공사원가'),
     a_value: extractField(description, 'A값'),
     lower_rate: extractField(description, '낙찰하한율'),
