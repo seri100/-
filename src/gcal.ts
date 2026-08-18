@@ -323,12 +323,17 @@ function normalizeDateSeparator(v: string | null): string | null {
 }
 
 // 라벨(입찰서접수개시일시/입찰마감일시) 없이 "YYYY-MM-DD HH:MM[:SS] ~ YYYY-MM-DD HH:MM[:SS]"
-// 형태의 날짜범위 줄만 있는 구버전 캘린더 이벤트를 위한 폴백 파서
+// 형태의 날짜범위 줄만 있는 구버전 캘린더 이벤트를 위한 폴백 파서.
+//   - 날짜 구분자는 '-' 뿐 아니라 '/'도 흔히 쓰이므로([-/] 둘 다 허용) 매칭한다.
+//     (예: "운호중 급식시설 현대화사업 기계/소방공사" - "2026/08/13 11:00:00 ~ 2026/08/24 10:00:00"
+//     처럼 슬래시만 쓰는 이벤트가 있는데, 하이픈만 인식하던 구버전 정규식은 이를 완전히
+//     놓쳐 bid_deadline이 NULL로 저장되고 기간 검색에서 통째로 누락되는 버그가 있었다.)
+//   - 시:분 사이에 공백이 낀 오타("15 :00")도 방어적으로 허용한다.
 function extractDateRangeFallback(text: string): { start: string | null; end: string | null } {
-  const re = /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\s*~\s*[\s\u00a0]*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/
+  const re = /(\d{4}[-/]\d{2}[-/]\d{2}\s+\d{2}\s*:\s*\d{2}(?::\d{2})?)\s*~\s*[\s\u00a0]*(\d{4}[-/]\d{2}[-/]\d{2}\s+\d{2}\s*:\s*\d{2}(?::\d{2})?)/
   const m = text.match(re)
   if (!m) return { start: null, end: null }
-  return { start: m[1].trim(), end: m[2].trim() }
+  return { start: m[1].trim().replace(/\s*:\s*/g, ':'), end: m[2].trim().replace(/\s*:\s*/g, ':') }
 }
 
 export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
