@@ -60,6 +60,7 @@ function renderRow(bid) {
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.region)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.main_industry)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.estimated_price)}</td>
+    <td class="py-2 px-3 whitespace-nowrap">${formatDeadline(bid.bid_open_recv_date)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${formatDeadline(bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
     <td class="py-2 px-3 max-w-[160px]">
@@ -86,7 +87,7 @@ function buildQuery() {
 }
 
 async function loadBids() {
-  listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">불러오는 중...</td></tr>'
+  listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">불러오는 중...</td></tr>'
   try {
     const qs = buildQuery()
     const res = await axios.get(`${BID_API_BASE}${qs ? '?' + qs : ''}`)
@@ -94,14 +95,14 @@ async function loadBids() {
 
     listBodyEl.innerHTML = ''
     if (items.length === 0) {
-      listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다.</td></tr>'
+      listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다.</td></tr>'
     } else {
       items.forEach((bid) => listBodyEl.appendChild(renderRow(bid)))
     }
     resultCountEl.textContent = `총 ${items.length}건`
   } catch (err) {
     console.error('입찰 목록 조회 실패:', err)
-    listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-red-400">불러오기에 실패했습니다.</td></tr>'
+    listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-red-400">불러오기에 실패했습니다.</td></tr>'
   }
 }
 

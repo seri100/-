@@ -145,7 +145,8 @@ const requireImportKey = async (c: any, next: any) => {
 // body: { items: [{ bid_no, bid_ord, category, title, agency, demand_agency,
 //                    main_industry, region, bid_method, contract_method,
 //                    estimated_price, budget_amount, notice_date,
-//                    bid_deadline, open_date, detail_url, collected_at }, ...] }
+//                    bid_deadline, open_date, bid_open_recv_date,
+//                    detail_url, collected_at }, ...] }
 app.post('/api/bids/import', requireImportKey, async (c) => {
   const { env } = c
   const body = await c.req.json().catch(() => null)
@@ -164,8 +165,8 @@ app.post('/api/bids/import', requireImportKey, async (c) => {
     INSERT INTO bids (
       bid_no, bid_ord, category, title, agency, demand_agency, main_industry,
       region, bid_method, contract_method, estimated_price, budget_amount,
-      notice_date, bid_deadline, open_date, detail_url, collected_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      notice_date, bid_deadline, open_date, bid_open_recv_date, detail_url, collected_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(bid_no, bid_ord) DO UPDATE SET
       category = excluded.category,
       title = excluded.title,
@@ -180,6 +181,7 @@ app.post('/api/bids/import', requireImportKey, async (c) => {
       notice_date = excluded.notice_date,
       bid_deadline = excluded.bid_deadline,
       open_date = excluded.open_date,
+      bid_open_recv_date = excluded.bid_open_recv_date,
       detail_url = excluded.detail_url,
       collected_at = excluded.collected_at,
       updated_at = datetime('now')
@@ -202,6 +204,7 @@ app.post('/api/bids/import', requireImportKey, async (c) => {
       it.notice_date ?? null,
       it.bid_deadline ?? null,
       it.open_date ?? null,
+      it.bid_open_recv_date ?? null,
       it.detail_url ?? null,
       it.collected_at ?? null
     )
@@ -437,11 +440,20 @@ app.get('/', (c) => {
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">지역</label>
-          <input id="filter-region" type="text" placeholder="예: 충북, 세종" class="border rounded px-2 py-1.5 text-sm w-32" />
+          <select id="filter-region" class="border rounded px-2 py-1.5 text-sm">
+            <option value="">전체</option>
+            <option value="전국">전국</option>
+            <option value="충북">충북</option>
+            <option value="세종">세종</option>
+          </select>
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">공종</label>
-          <input id="filter-industry" type="text" placeholder="예: 기계설비" class="border rounded px-2 py-1.5 text-sm w-32" />
+          <select id="filter-industry" class="border rounded px-2 py-1.5 text-sm">
+            <option value="">전체</option>
+            <option value="기계설비">기계설비</option>
+            <option value="소방설비">소방설비</option>
+          </select>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
@@ -466,6 +478,7 @@ app.get('/', (c) => {
               <th class="py-2 px-3">지역</th>
               <th class="py-2 px-3">공종</th>
               <th class="py-2 px-3">추정가격</th>
+              <th class="py-2 px-3">입찰개시일</th>
               <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
@@ -473,7 +486,7 @@ app.get('/', (c) => {
             </tr>
           </thead>
           <tbody id="bid-list-body" class="divide-y">
-            <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
+            <tr><td colspan={11} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
       </section>

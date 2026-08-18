@@ -113,6 +113,7 @@ def row_to_bid_item(row: dict, category: str) -> dict:
         "notice_date": row.get("공고일시"),
         "bid_deadline": row.get("입찰마감일시"),
         "open_date": row.get("개찰일시"),
+        "bid_open_recv_date": row.get("입찰서접수개시일시"),  # 입찰개시일
         "detail_url": row.get("공고URL") or row.get("bidNtceDtlUrl"),
         "collected_at": row.get("수집일시"),
     }
