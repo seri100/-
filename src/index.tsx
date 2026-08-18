@@ -734,4 +734,69 @@ app.get('/gcal', (c) => {
   )
 })
 
+// [GET] /manual - 비개발자용 사용 매뉴얼(MANUAL.md)을 웹페이지로 열람
+//   - 로그인 없이 URL만으로 누구나 열람 가능(전체 공개 라우트)
+//   - Cloudflare Workers는 런타임에 파일을 읽을 수 없으므로, 브라우저에서
+//     정적 파일(/static/manual.md)을 fetch한 뒤 marked.js(CDN)로 렌더링한다.
+app.get('/manual', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>입찰관리 대시보드 - 사용 매뉴얼</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <style>
+        #manual-content h1 { font-size: 1.8rem; font-weight: 700; margin: 1.2em 0 0.6em; color: #1f2937; }
+        #manual-content h2 { font-size: 1.4rem; font-weight: 700; margin: 1.4em 0 0.5em; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+        #manual-content h3 { font-size: 1.15rem; font-weight: 600; margin: 1.1em 0 0.4em; color: #374151; }
+        #manual-content p { margin: 0.6em 0; line-height: 1.7; color: #374151; }
+        #manual-content ul, #manual-content ol { margin: 0.6em 0; padding-left: 1.5em; line-height: 1.7; color: #374151; }
+        #manual-content li { margin: 0.3em 0; }
+        #manual-content code { background: #f3f4f6; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
+        #manual-content pre { background: #1f2937; color: #f3f4f6; padding: 1em; border-radius: 8px; overflow-x: auto; margin: 0.8em 0; }
+        #manual-content pre code { background: none; padding: 0; color: inherit; }
+        #manual-content table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+        #manual-content th, #manual-content td { border: 1px solid #e5e7eb; padding: 0.5em 0.8em; text-align: left; }
+        #manual-content th { background: #f9fafb; font-weight: 600; }
+        #manual-content a { color: #2563eb; text-decoration: underline; }
+        #manual-content hr { margin: 1.5em 0; border-color: #e5e7eb; }
+        #manual-content blockquote { border-left: 4px solid #d1d5db; padding-left: 1em; color: #6b7280; margin: 0.8em 0; }
+      </style>
+    </head>
+    <body class="bg-gray-50">
+      <div class="max-w-3xl mx-auto py-8 px-4">
+        <div class="mb-4 flex items-center justify-between">
+          <a href="/gcal" class="text-sm text-blue-600 hover:underline">
+            <i class="fas fa-arrow-left mr-1"></i>대시보드로 돌아가기
+          </a>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6 md:p-10">
+          <div id="manual-content" class="text-sm md:text-base">
+            <p class="text-gray-400">불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+      <script>
+        fetch('/static/manual.md')
+          .then((r) => {
+            if (!r.ok) throw new Error('failed to load manual.md: ' + r.status)
+            return r.text()
+          })
+          .then((text) => {
+            document.getElementById('manual-content').innerHTML = marked.parse(text)
+          })
+          .catch((err) => {
+            document.getElementById('manual-content').innerHTML =
+              '<p class="text-red-500">매뉴얼을 불러오지 못했습니다: ' + err.message + '</p>'
+          })
+      </script>
+    </body>
+    </html>
+  `)
+})
+
 export default app
