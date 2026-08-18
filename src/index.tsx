@@ -460,7 +460,20 @@ app.get('/', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[900px]">
+        <table class="w-full text-sm min-w-[1100px] table-fixed">
+          <colgroup>
+            <col class="w-[70px]" />
+            <col class="w-[360px]" />
+            <col class="w-[140px]" />
+            <col class="w-[90px]" />
+            <col class="w-[70px]" />
+            <col class="w-[100px]" />
+            <col class="w-[130px]" />
+            <col class="w-[130px]" />
+            <col class="w-[90px]" />
+            <col class="w-[140px]" />
+            <col class="w-[50px]" />
+          </colgroup>
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
               <th class="py-2 px-3">상태</th>
@@ -578,14 +591,27 @@ app.get('/gcal', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[900px]">
+        <table class="w-full text-sm min-w-[1100px] table-fixed">
+          <colgroup>
+            <col class="w-[70px]" />
+            <col class="w-[360px]" />
+            <col class="w-[140px]" />
+            <col class="w-[90px]" />
+            <col class="w-[70px]" />
+            <col class="w-[100px]" />
+            <col class="w-[130px]" />
+            <col class="w-[130px]" />
+            <col class="w-[90px]" />
+            <col class="w-[140px]" />
+            <col class="w-[50px]" />
+          </colgroup>
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
               <th class="py-2 px-3">상태</th>
               <th class="py-2 px-3">공고명</th>
               <th class="py-2 px-3">발주기관</th>
               <th class="py-2 px-3">참가지역</th>
-              <th class="py-2 px-3">업종</th>
+              <th class="py-2 px-3">공종</th>
               <th class="py-2 px-3">기초금액</th>
               <th class="py-2 px-3">입찰개시일</th>
               <th class="py-2 px-3">입찰마감</th>

@@ -35,6 +35,16 @@ function formatText(v) {
   return v
 }
 
+function shortIndustry(v) {
+  if (!v) return '-'
+  const s = String(v)
+  if (s.includes('소방')) return '소방'
+  if (s.includes('기계')) return '기계'
+  if (s.includes('전기')) return '전기'
+  // 위 세 카테고리에 해당하지 않는 경우(낙찰방법 텍스트 등 잘못 파싱된 값) 원문 일부만 표시
+  return s.length > 6 ? s.slice(0, 6) + '…' : s
+}
+
 function statusBadge(status) {
   if (status === '제출완료') {
     return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">제출완료</span>'
@@ -52,12 +62,12 @@ function renderRow(bid) {
         ${statusBadge(bid.status)}
       </button>
     </td>
-    <td class="py-2 px-3 max-w-xs">
+    <td class="py-2 px-3">
       <span class="line-clamp-2" title="${escapeHtml(bid.title)}">${escapeHtml(bid.title)}</span>
     </td>
-    <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.agency)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.participant_region)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.industry)}</td>
+    <td class="py-2 px-3 truncate" title="${escapeHtml(bid.agency)}">${escapeHtml(bid.agency)}</td>
+    <td class="py-2 px-3 truncate" title="${escapeHtml(bid.participant_region)}">${escapeHtml(bid.participant_region)}</td>
+    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.industry)}">${shortIndustry(bid.industry)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.base_amount)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${formatText(bid.bid_open_recv_date)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${formatText(bid.bid_deadline)}</td>
