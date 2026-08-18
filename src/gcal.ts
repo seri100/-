@@ -309,6 +309,19 @@ function extractBidNoFromUrl(url: string | null): { bidNo: string | null; bidOrd
   }
 }
 
+// 날짜 문자열의 구분자를 "YYYY-MM-DD"로 통일한다.
+//   - 나라장터/한전 등 대부분의 소스는 "2026-08-20 10:00:00" 형태를 쓰지만,
+//     일부 수동 등록 이벤트는 "2026/08/28 10:00:00"처럼 슬래시를 쓴다.
+//   - 날짜 필터(/api/gcal-bids?date_from=...)가 substr()로 앞 10자리를 문자열
+//     비교하는데, ASCII상 '/'(47)가 '-'(45)보다 커서 슬래시 포맷 날짜가 실제로는
+//     기간 안에 있어도 문자열 비교에서 밀려나 검색 결과에서 누락되는 버그가 있었다.
+//     저장 시점에 구분자를 통일해 이 문제를 근본적으로 막는다.
+function normalizeDateSeparator(v: string | null): string | null {
+  if (!v) return v
+  // "YYYY/MM/DD" 부분만 "YYYY-MM-DD"로 치환 (시각 부분의 콜론 등은 건드리지 않음)
+  return v.replace(/(\d{4})\/(\d{2})\/(\d{2})/g, '$1-$2-$3')
+}
+
 // 라벨(입찰서접수개시일시/입찰마감일시) 없이 "YYYY-MM-DD HH:MM[:SS] ~ YYYY-MM-DD HH:MM[:SS]"
 // 형태의 날짜범위 줄만 있는 구버전 캘린더 이벤트를 위한 폴백 파서
 function extractDateRangeFallback(text: string): { start: string | null; end: string | null } {
@@ -387,9 +400,9 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     lower_rate: extractField(description, '낙찰하한율'),
     participant_region: participantRegion,
     joint_region: extractField(description, '공동도급지역'),
-    bid_open_recv_date: bidOpenRecvDate,
-    bid_deadline: bidDeadline,
-    agreement_deadline: extractField(description, '협정마감일시'),
+    bid_open_recv_date: normalizeDateSeparator(bidOpenRecvDate),
+    bid_deadline: normalizeDateSeparator(bidDeadline),
+    agreement_deadline: normalizeDateSeparator(extractField(description, '협정마감일시')),
     detail_url: detailUrl,
     location: item.location || null,
     event_start: item.start?.dateTime || item.start?.date || null,

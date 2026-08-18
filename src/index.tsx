@@ -352,11 +352,14 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(`%${industry}%`)
   }
   if (dateFrom) {
-    query += ` AND substr(b.bid_deadline, 1, 10) >= ?`
+    // bid_deadline은 저장 시점에 "YYYY-MM-DD"로 구분자를 통일하지만, 통일 이전에
+    // 들어온 과거 데이터("YYYY/MM/DD")가 남아있을 수 있어 비교 시점에도 REPLACE로
+    // 방어한다('/' 가 '-'보다 ASCII 값이 커서 문자열 비교 시 날짜가 밀려나는 버그 방지).
+    query += ` AND substr(REPLACE(b.bid_deadline, '/', '-'), 1, 10) >= ?`
     params.push(dateFrom)
   }
   if (dateTo) {
-    query += ` AND substr(b.bid_deadline, 1, 10) <= ?`
+    query += ` AND substr(REPLACE(b.bid_deadline, '/', '-'), 1, 10) <= ?`
     params.push(dateTo)
   }
   if (q) {
@@ -364,7 +367,7 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(`%${q}%`)
   }
 
-  query += ` ORDER BY b.bid_deadline ASC LIMIT ? OFFSET ?`
+  query += ` ORDER BY REPLACE(b.bid_deadline, '/', '-') ASC LIMIT ? OFFSET ?`
   params.push(limit, offset)
 
   const { results } = await env.DB.prepare(query).bind(...params).all()
