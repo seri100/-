@@ -1,0 +1,418 @@
+// ==================================================================
+// 구글 캘린더(Google Calendar API) 직접 연동 모듈
+//   - Cloudflare Workers 런타임에서는 Node.js용 googleapis 패키지를
+//     사용할 수 없으므로, Web Crypto API로 서비스 계정 JWT를 직접
+//     서명해 OAuth2 access token을 발급받고 REST API를 fetch로 호출한다.
+//   - 이벤트 title/description은 라즈베리파이 main_send.py의
+//     build_gcal_message() 가 만든 "라벨 : 값" 줄바꿈 포맷을 그대로
+//     따르므로, 같은 라벨 기준으로 정규식 파싱한다.
+// ==================================================================
+
+export type GcalBindings = {
+  DB: D1Database
+  // 서비스 계정 키(JSON 전체를 문자열로) - wrangler secret으로 등록, 절대 코드에 하드코딩 금지
+  GCAL_SERVICE_ACCOUNT_JSON: string
+  // 이벤트를 읽어올 캘린더 ID (기본값: 라즈베리파이가 실제로 쓰는 캘린더)
+  GCAL_CALENDAR_ID?: string
+}
+
+const DEFAULT_CALENDAR_ID = 'ck4642060@gmail.com'
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
+const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+
+interface ServiceAccountKey {
+  client_email: string
+  private_key: string
+  token_uri?: string
+}
+
+// ------------------------------------------------------------------
+// base64url 인코딩 유틸 (Web Crypto API 결과물을 JWT 세그먼트로 변환)
+// ------------------------------------------------------------------
+function base64UrlFromBytes(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function base64UrlFromString(str: string): string {
+  return base64UrlFromBytes(new TextEncoder().encode(str))
+}
+
+// PEM(PKCS8) 형식의 private_key 문자열을 crypto.subtle.importKey용 ArrayBuffer로 변환
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s+/g, '')
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes.buffer
+}
+
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const keyData = pemToArrayBuffer(pem)
+  return crypto.subtle.importKey(
+    'pkcs8',
+    keyData,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+}
+
+// ------------------------------------------------------------------
+// 서비스 계정 JWT 서명 -> Google OAuth2 access token 교환
+// ------------------------------------------------------------------
+let cachedToken: { token: string; expiresAt: number } | null = null
+
+async function getAccessToken(env: GcalBindings): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+
+  if (cachedToken && cachedToken.expiresAt - 60 > now) {
+    return cachedToken.token
+  }
+
+  if (!env.GCAL_SERVICE_ACCOUNT_JSON) {
+    throw new Error('GCAL_SERVICE_ACCOUNT_JSON 시크릿이 설정되지 않았습니다.')
+  }
+
+  let key: ServiceAccountKey
+  try {
+    key = JSON.parse(env.GCAL_SERVICE_ACCOUNT_JSON)
+  } catch (e) {
+    throw new Error('GCAL_SERVICE_ACCOUNT_JSON 파싱 실패: 유효한 JSON이 아닙니다.')
+  }
+
+  const header = { alg: 'RS256', typ: 'JWT' }
+  const claim = {
+    iss: key.client_email,
+    scope: GCAL_SCOPE,
+    aud: key.token_uri || TOKEN_URL,
+    iat: now,
+    exp: now + 3600
+  }
+
+  const signingInput = `${base64UrlFromString(JSON.stringify(header))}.${base64UrlFromString(JSON.stringify(claim))}`
+
+  const cryptoKey = await importPrivateKey(key.private_key)
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(signingInput)
+  )
+
+  const jwt = `${signingInput}.${base64UrlFromBytes(new Uint8Array(signature))}`
+
+  const res = await fetch(key.token_uri || TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt
+    })
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Google OAuth2 토큰 발급 실패 (${res.status}): ${text}`)
+  }
+
+  const data = await res.json<{ access_token: string; expires_in: number }>()
+  cachedToken = { token: data.access_token, expiresAt: now + (data.expires_in || 3600) }
+  return data.access_token
+}
+
+// ------------------------------------------------------------------
+// Google Calendar events.list 호출
+// ------------------------------------------------------------------
+interface GcalEventItem {
+  id: string
+  summary?: string
+  description?: string
+  location?: string
+  htmlLink?: string
+  status?: string
+  start?: { dateTime?: string; date?: string }
+  end?: { dateTime?: string; date?: string }
+}
+
+async function listCalendarEvents(env: GcalBindings): Promise<GcalEventItem[]> {
+  const accessToken = await getAccessToken(env)
+  const calendarId = env.GCAL_CALENDAR_ID || DEFAULT_CALENDAR_ID
+
+  const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // 30일 전
+  const timeMax = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString() // 180일 후
+
+  const items: GcalEventItem[] = []
+  let pageToken: string | undefined
+
+  do {
+    const params = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250'
+    })
+    if (pageToken) params.set('pageToken', pageToken)
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Google Calendar API 호출 실패 (${res.status}): ${text}`)
+    }
+
+    const data = await res.json<{ items: GcalEventItem[]; nextPageToken?: string }>()
+    items.push(...(data.items || []))
+    pageToken = data.nextPageToken
+  } while (pageToken)
+
+  return items.filter((it) => it.status !== 'cancelled')
+}
+
+// ------------------------------------------------------------------
+// description 파싱: "라벨 : 값" 줄바꿈 포맷 (main_send.py build_gcal_message 형식)
+//   - 주의: Google Calendar API는 description을 HTML로 반환하므로
+//     실제 줄바꿈 문자(\n)가 아니라 <br> 태그로 되어 있다.
+//     또한 참가업체 목록은 <table>...</table>, 상세URL은 <a href="...">로
+//     감싸져 있어 파싱 전에 정규화가 필요하다.
+// ------------------------------------------------------------------
+
+// HTML을 라즈베리파이 원본 텍스트(줄바꿈 기반)에 최대한 가깝게 되돌린다.
+function normalizeGcalDescription(html: string): string {
+  if (!html) return ''
+  let text = html
+    // <br>, <br/>, <br /> 전부 개행으로
+    .replace(/<br\s*\/?>/gi, '\n')
+    // <table>...</table> 블록(참가업체 리스트)은 통째로 제거 - 라벨 파싱에 방해되지 않도록
+    .replace(/<table[\s\S]*?<\/table>/gi, '')
+    // <div>, <p> 도 개행으로 취급
+    .replace(/<\/(div|p)>/gi, '\n')
+    // 나머지 태그 제거 (단, <a href="...">텍스트</a> 는 URL을 살려서 치환)
+    .replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi, '$1')
+    .replace(/<[^>]+>/g, '')
+    // HTML 엔티티 복원
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // 개행 3개 이상은 2개로 축소
+    .replace(/\n{3,}/g, '\n\n')
+
+  return text
+}
+
+function extractField(text: string, label: string): string | null {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^${escaped}\\s*[:：]\\s*(.+)$`, 'm')
+  const m = text.match(re)
+  return m ? m[1].trim() : null
+}
+
+export interface ParsedGcalBid {
+  event_id: string
+  bid_no: string | null
+  bid_ord: string | null
+  title: string | null
+  summary: string | null
+  agency: string | null
+  industry: string | null
+  task_type: string | null
+  bid_method: string | null
+  base_amount: string | null
+  pure_cost: string | null
+  a_value: string | null
+  lower_rate: string | null
+  participant_region: string | null
+  joint_region: string | null
+  bid_open_recv_date: string | null
+  bid_deadline: string | null
+  agreement_deadline: string | null
+  detail_url: string | null
+  location: string | null
+  event_start: string | null
+  event_end: string | null
+  html_link: string | null
+  raw_description: string | null
+}
+
+// 상세URL의 쿼리파라미터(bidPbancNo/bidPbancOrd)에서 공고번호를 복원하는 폴백
+function extractBidNoFromUrl(url: string | null): { bidNo: string | null; bidOrd: string | null } {
+  if (!url) return { bidNo: null, bidOrd: null }
+  try {
+    const u = new URL(url)
+    const no = u.searchParams.get('bidPbancNo')
+    const ord = u.searchParams.get('bidPbancOrd')
+    return { bidNo: no, bidOrd: ord ? ord.padStart(3, '0') : null }
+  } catch {
+    return { bidNo: null, bidOrd: null }
+  }
+}
+
+// 라벨(입찰서접수개시일시/입찰마감일시) 없이 "YYYY-MM-DD HH:MM[:SS] ~ YYYY-MM-DD HH:MM[:SS]"
+// 형태의 날짜범위 줄만 있는 구버전 캘린더 이벤트를 위한 폴백 파서
+function extractDateRangeFallback(text: string): { start: string | null; end: string | null } {
+  const re = /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\s*~\s*[\s\u00a0]*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/
+  const m = text.match(re)
+  if (!m) return { start: null, end: null }
+  return { start: m[1].trim(), end: m[2].trim() }
+}
+
+export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
+  const description = normalizeGcalDescription(item.description || '')
+
+  const detailUrl = extractField(description, '상세URL')
+
+  const noticeRaw = extractField(description, '공고번호')
+  let bidNo: string | null = null
+  let bidOrd: string | null = null
+  if (noticeRaw) {
+    const m = noticeRaw.match(/([A-Z0-9]+)\s*-\s*(\d+)/)
+    if (m) {
+      bidNo = m[1]
+      bidOrd = m[2].padStart(3, '0')
+    } else {
+      bidNo = noticeRaw
+    }
+  }
+  // 공고번호 라벨이 없는 구버전 이벤트는 상세URL 쿼리파라미터에서 복원
+  if (!bidNo) {
+    const fromUrl = extractBidNoFromUrl(detailUrl)
+    bidNo = fromUrl.bidNo
+    bidOrd = fromUrl.bidOrd
+  }
+
+  const title =
+    extractField(description, '공고명') ||
+    (item.summary ? item.summary.replace(/^[^\[]*\[입찰개시\]\s*/, '') : null)
+
+  // 입찰서접수개시일시/입찰마감일시 라벨이 있으면 그대로, 없으면
+  // "시작 ~ 끝" 형태의 날짜범위 줄에서 폴백으로 채운다.
+  let bidOpenRecvDate = extractField(description, '입찰서접수개시일시')
+  let bidDeadline = extractField(description, '입찰마감일시')
+  if (!bidOpenRecvDate || !bidDeadline) {
+    const range = extractDateRangeFallback(description)
+    if (!bidOpenRecvDate) bidOpenRecvDate = range.start
+    if (!bidDeadline) bidDeadline = range.end
+  }
+
+  return {
+    event_id: item.id,
+    bid_no: bidNo,
+    bid_ord: bidOrd,
+    title,
+    summary: item.summary || null,
+    agency: extractField(description, '발주기관'),
+    industry: extractField(description, '업종'),
+    task_type: extractField(description, '업무구분'),
+    bid_method: extractField(description, '낙찰방법'),
+    base_amount: extractField(description, '기초금액'),
+    pure_cost: extractField(description, '순공사원가'),
+    a_value: extractField(description, 'A값'),
+    lower_rate: extractField(description, '낙찰하한율'),
+    participant_region: extractField(description, '참가지역'),
+    joint_region: extractField(description, '공동도급지역'),
+    bid_open_recv_date: bidOpenRecvDate,
+    bid_deadline: bidDeadline,
+    agreement_deadline: extractField(description, '협정마감일시'),
+    detail_url: detailUrl,
+    location: item.location || null,
+    event_start: item.start?.dateTime || item.start?.date || null,
+    event_end: item.end?.dateTime || item.end?.date || null,
+    html_link: item.htmlLink || null,
+    raw_description: description || null
+  }
+}
+
+// ------------------------------------------------------------------
+// 캘린더 -> D1(gcal_bids) 동기화 파이프라인
+// ------------------------------------------------------------------
+export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number; synced: number }> {
+  const events = await listCalendarEvents(env)
+  const parsed = events.map(parseGcalEvent)
+
+  if (parsed.length === 0) {
+    return { fetched: 0, synced: 0 }
+  }
+
+  const stmt = env.DB.prepare(`
+    INSERT INTO gcal_bids (
+      event_id, bid_no, bid_ord, title, summary, agency, industry, task_type,
+      bid_method, base_amount, pure_cost, a_value, lower_rate,
+      participant_region, joint_region, bid_open_recv_date, bid_deadline,
+      agreement_deadline, detail_url, location, event_start, event_end,
+      html_link, raw_description, synced_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(event_id) DO UPDATE SET
+      bid_no = excluded.bid_no,
+      bid_ord = excluded.bid_ord,
+      title = excluded.title,
+      summary = excluded.summary,
+      agency = excluded.agency,
+      industry = excluded.industry,
+      task_type = excluded.task_type,
+      bid_method = excluded.bid_method,
+      base_amount = excluded.base_amount,
+      pure_cost = excluded.pure_cost,
+      a_value = excluded.a_value,
+      lower_rate = excluded.lower_rate,
+      participant_region = excluded.participant_region,
+      joint_region = excluded.joint_region,
+      bid_open_recv_date = excluded.bid_open_recv_date,
+      bid_deadline = excluded.bid_deadline,
+      agreement_deadline = excluded.agreement_deadline,
+      detail_url = excluded.detail_url,
+      location = excluded.location,
+      event_start = excluded.event_start,
+      event_end = excluded.event_end,
+      html_link = excluded.html_link,
+      raw_description = excluded.raw_description,
+      synced_at = datetime('now'),
+      updated_at = datetime('now')
+  `)
+
+  const batch = parsed.map((p) =>
+    stmt.bind(
+      p.event_id,
+      p.bid_no,
+      p.bid_ord,
+      p.title,
+      p.summary,
+      p.agency,
+      p.industry,
+      p.task_type,
+      p.bid_method,
+      p.base_amount,
+      p.pure_cost,
+      p.a_value,
+      p.lower_rate,
+      p.participant_region,
+      p.joint_region,
+      p.bid_open_recv_date,
+      p.bid_deadline,
+      p.agreement_deadline,
+      p.detail_url,
+      p.location,
+      p.event_start,
+      p.event_end,
+      p.html_link,
+      p.raw_description
+    )
+  )
+
+  // D1 batch는 한 번에 너무 많은 문장을 넣으면 실패할 수 있어 100개 단위로 분할
+  const CHUNK = 100
+  for (let i = 0; i < batch.length; i += CHUNK) {
+    await env.DB.batch(batch.slice(i, i + CHUNK))
+  }
+
+  return { fetched: events.length, synced: parsed.length }
+}
