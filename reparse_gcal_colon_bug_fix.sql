@@ -1,0 +1,10 @@
+UPDATE gcal_bids SET industry = NULL WHERE event_id = 'bid2a4683e47c5a0f22d5a7b3e75a2164638a331d31';
+UPDATE gcal_bids SET industry = '기계설비공사업' WHERE event_id = 'bid45246e10e9ac9419db88e87e328b3a778b60e636';
+UPDATE gcal_bids SET participant_region = NULL WHERE event_id = '0keabs6gkthhdso6ilhq44sppq';
+UPDATE gcal_bids SET joint_region = NULL WHERE event_id = '4muknvu03m98l2ljsb0p9uls61';
+UPDATE gcal_bids SET participant_region = NULL WHERE event_id = '5rvr6e6gtgbbtu474pepvd7368';
+UPDATE gcal_bids SET joint_region = NULL WHERE event_id = '3bkpp6g062njjmff3bu3u4k7qc';
+UPDATE gcal_bids SET participant_region = NULL WHERE event_id = 't6hthrtrb1qmph2ia0mffa21r4';
+UPDATE gcal_bids SET participant_region = NULL WHERE event_id = 'vb1gks6h5sdv4c71rbvtdl1loo';
+UPDATE gcal_bids SET industry = NULL WHERE event_id = 'bid48d5090209d384caa134f66c4f0043ebaafbfad8';
+UPDATE gcal_bids SET industry = NULL WHERE event_id = 'bid9236f6416eb014e5e8ed03082003c04c5f26aa7b';

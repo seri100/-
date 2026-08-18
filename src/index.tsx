@@ -15,6 +15,35 @@ const app = new Hono<{ Bindings: Bindings }>()
 // API 전용 CORS 허용 (프론트-백엔드 분리 아키텍처를 가정)
 app.use('/api/*', cors())
 
+// ------------------------------------------------------------------
+// 지역명 동의어 매핑
+//   - 캘린더/원본 데이터에 "충북"(축약형)과 "충청북도"(정식명칭)가
+//     혼재되어 있어, 필터 드롭다운 값 하나로 두 형태를 모두 매칭해야 한다.
+// ------------------------------------------------------------------
+const REGION_SYNONYMS: Record<string, string[]> = {
+  '충북': ['충북', '충청북도'],
+  '충남': ['충남', '충청남도'],
+  '전북': ['전북', '전라북도'],
+  '전남': ['전남', '전라남도'],
+  '경북': ['경북', '경상북도'],
+  '경남': ['경남', '경상남도'],
+  '서울': ['서울', '서울특별시'],
+  '부산': ['부산', '부산광역시'],
+  '대구': ['대구', '대구광역시'],
+  '인천': ['인천', '인천광역시'],
+  '광주': ['광주', '광주광역시'],
+  '대전': ['대전', '대전광역시'],
+  '울산': ['울산', '울산광역시'],
+  '세종': ['세종', '세종특별자치시'],
+  '경기': ['경기', '경기도'],
+  '강원': ['강원', '강원도', '강원특별자치도'],
+  '제주': ['제주', '제주도', '제주특별자치도']
+}
+
+function regionVariants(region: string): string[] {
+  return REGION_SYNONYMS[region] || [region]
+}
+
 // ==================================================================
 // REST API: 입찰 관리 (bids + bid_status)
 //   - bids: 라즈베리파이가 gongo/*.csv를 매일 업로드하는 원본 미러
@@ -142,8 +171,10 @@ app.get('/api/bids', async (c) => {
     params.push(status)
   }
   if (region) {
-    query += ` AND b.region LIKE ?`
-    params.push(`%${region}%`)
+    // "충북"/"충청북도"처럼 축약형·정식명칭이 혼재하므로 동의어를 모두 OR로 매칭
+    const variants = regionVariants(region)
+    query += ` AND (${variants.map(() => `b.region LIKE ?`).join(' OR ')})`
+    params.push(...variants.map((v) => `%${v}%`))
   }
   if (industry) {
     // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
@@ -309,8 +340,10 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(status)
   }
   if (region) {
-    query += ` AND (b.participant_region LIKE ? OR b.joint_region LIKE ?)`
-    params.push(`%${region}%`, `%${region}%`)
+    // "충북"/"충청북도"처럼 축약형·정식명칭이 혼재하므로 동의어를 모두 OR로 매칭
+    const variants = regionVariants(region)
+    query += ` AND (${variants.map(() => `(b.participant_region LIKE ? OR b.joint_region LIKE ?)`).join(' OR ')})`
+    for (const v of variants) params.push(`%${v}%`, `%${v}%`)
   }
   if (industry) {
     // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로

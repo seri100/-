@@ -212,9 +212,61 @@ function normalizeGcalDescription(html: string): string {
 
 function extractField(text: string, label: string): string | null {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`^${escaped}\\s*[:：]\\s*(.+)$`, 'm')
+  // 콜론과 값 사이는 "줄바꿈이 아닌 공백"만 허용한다.
+  //   - \s*를 쓰면 값이 비어있을 때 줄바꿈까지 삼켜 다음 줄
+  //     ("입찰서접수개시일시 : ...")을 잘못 캡처하는 버그가 있었다.
+  //   - 그렇다고 [ \t]*로 좁히면, 원본에 일반 스페이스가 아닌 NBSP(\u00a0)가
+  //     라벨-콜론 사이에 들어간 경우("기초금액\u00a0\u00a0: ...")를 놓쳐
+  //     정상 값까지 NULL로 만드는 회귀가 생긴다.
+  //   - [^\S\r\n]* : "공백 문자이면서 \r, \n은 아닌 것" = NBSP 등 모든
+  //     공백류는 허용하되 줄바꿈만 제외한다.
+  const re = new RegExp(`^${escaped}[^\\S\\r\\n]*[:：][^\\S\\r\\n]*(.*)$`, 'm')
   const m = text.match(re)
-  return m ? m[1].trim() : null
+  if (!m) return null
+  const v = m[1].trim()
+  return v ? v : null
+}
+
+// ------------------------------------------------------------------
+// 업종/참가지역 폴백 파서
+//   - 라즈베리파이가 보내는 캘린더 설명은 "발주기관 : ..." 라벨형 포맷과
+//     자유 텍스트형 포맷(예: "[충청북도 청주시]\n날짜...")이 섞여 있어,
+//     표준 라벨(업종/참가지역)이 없으면 절반 가까운 이벤트가 값 없이
+//     저장되어 지역/공종 필터에서 누락되는 문제가 있었다.
+//   - 아래 폴백은 본문 전체에서 공종/지역 키워드를 직접 탐색해 채운다.
+// ------------------------------------------------------------------
+
+// 긴 지역명을 먼저 검사해야 "충청북도"가 "충북"보다 먼저 매칭된다.
+const REGION_KEYWORDS = [
+  '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도',
+  '서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시',
+  '대전광역시', '울산광역시', '세종특별자치시',
+  '충북', '충남', '전북', '전남', '경북', '경남',
+  '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
+  '경기', '강원', '제주', '전국'
+]
+
+function extractRegionFallback(text: string): string | null {
+  if (!text) return null
+  // "[충청북도 청주시]" 같은 대괄호 지역 표기를 우선 그대로 살린다.
+  const bracket = text.match(/\[([^\]]+)\]/)
+  if (bracket && REGION_KEYWORDS.some((kw) => bracket[1].includes(kw))) {
+    return bracket[1].trim()
+  }
+  for (const kw of REGION_KEYWORDS) {
+    if (text.includes(kw)) return kw
+  }
+  return null
+}
+
+// 공종 표준 명칭(실제 나라장터/한전 등에서 쓰이는 업종명)으로 통일해 반환한다.
+function extractIndustryFallback(text: string, title: string | null): string | null {
+  const combined = `${title || ''}\n${text || ''}`
+  if (!combined.trim()) return null
+  if (combined.includes('소방')) return '전문소방시설공사업'
+  if (combined.includes('기계')) return '기계설비공사업'
+  if (combined.includes('전기')) return '전기공사업'
+  return null
 }
 
 export interface ParsedGcalBid {
@@ -304,6 +356,20 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     if (!bidDeadline) bidDeadline = range.end
   }
 
+  // 업종: "업종" 라벨 -> LH식 "업종유형" 라벨 -> 한전식 "면허·첨부서류"(업종코드 포함) ->
+  //       그래도 없으면 제목/본문 키워드(소방/기계/전기)로 유추
+  const industry =
+    extractField(description, '업종') ||
+    extractField(description, '업종유형') ||
+    extractIndustryFallback(extractField(description, '면허·첨부서류') || '', null) ||
+    extractIndustryFallback(description, title)
+
+  // 참가지역: "참가지역" 라벨 -> 국가철도공단식 "지역" 라벨 -> 본문 전체에서 지역명 직접 탐색
+  const participantRegion =
+    extractField(description, '참가지역') ||
+    extractField(description, '지역') ||
+    extractRegionFallback(description)
+
   return {
     event_id: item.id,
     bid_no: bidNo,
@@ -311,14 +377,14 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     title,
     summary: item.summary || null,
     agency: extractField(description, '발주기관'),
-    industry: extractField(description, '업종'),
+    industry,
     task_type: extractField(description, '업무구분'),
     bid_method: extractField(description, '낙찰방법'),
     base_amount: extractField(description, '기초금액'),
     pure_cost: extractField(description, '순공사원가'),
     a_value: extractField(description, 'A값'),
     lower_rate: extractField(description, '낙찰하한율'),
-    participant_region: extractField(description, '참가지역'),
+    participant_region: participantRegion,
     joint_region: extractField(description, '공동도급지역'),
     bid_open_recv_date: bidOpenRecvDate,
     bid_deadline: bidDeadline,
