@@ -22,7 +22,7 @@
 - **입찰 관리 API Base (구글 캘린더 기준, 신규)**: `/api/gcal-bids`
 - **로컬 개발 미리보기**: http://localhost:3000
 
-> ⚠️ "구글 캘린더 기준" 관련 URL·API는 이번 세션에서 로컬 개발환경 검증까지 완료되었으며, **프로덕션 배포는 아직 진행되지 않았습니다.** 프로덕션 반영 전 `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록과 원격 D1 마이그레이션 적용이 필요합니다 (아래 "Next Steps"의 "`/gcal` 프로덕션 배포" 항목 참고).
+> ✅ "구글 캘린더 기준" 관련 URL·API는 프로덕션에 배포 완료되었습니다 (원격 D1 마이그레이션 적용, `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록, 재배포까지 완료). 배포 직후 "캘린더 동기화" 1회 실행으로 초기 적재(310건)도 완료했습니다.
 
 ## API 엔드포인트
 
@@ -189,7 +189,7 @@ ck4642060@gmail.com
 - `sync_bids_to_cloudflare.py`는 `gongo/*.csv`를 **읽기만** 하며, 기존 파일을 수정하지 않습니다.
 - `/gcal` 경로는 라즈베리파이 CSV 파이프라인과 **완전히 독립**되어 있어, 위 CSV 동기화(`sync_bids_to_cloudflare.py`)가 라즈베리파이에 아직 설치되지 않았어도 정상 동작합니다. 필요한 건 캘린더 접근 권한(서비스 계정)뿐입니다.
 
-> ℹ️ 아래 "라즈베리파이 설정 방법"은 `/`(라즈베리파이 기준) 대시보드에만 해당합니다. `/gcal` 대시보드는 라즈베리파이에 아무것도 설치하지 않아도 되며, Cloudflare 쪽 시크릿/D1 설정만으로 동작합니다 (아래 "Next Steps"의 "`/gcal` 프로덕션 배포" 항목 참고).
+> ℹ️ 아래 "라즈베리파이 설정 방법"은 `/`(라즈베리파이 기준) 대시보드에만 해당합니다. `/gcal` 대시보드는 라즈베리파이에 아무것도 설치하지 않아도 되며, Cloudflare 쪽 시크릿/D1 설정만으로 동작합니다 (프로덕션 배포 완료, 아래 "Deployment" 참고).
 
 ## 라즈베리파이 설정 방법 (배포 완료, 아래만 진행하면 됨)
 
@@ -233,24 +233,19 @@ ck4642060@gmail.com
 - 상태 변경 이력(누가 언제 어떤 상태로 바꿨는지 로그) — 현재는 최종 상태만 저장
 - 페이지네이션 UI (API는 limit/offset 지원하나 프론트는 아직 미적용)
 - `main_send.py`/`gcal_sync.py`가 이미 하는 지역·공종 필터와 이 앱의 필터 기준이 완전히 동일한지는 실제 데이터로 추가 검증 필요
-- **[신규] `/gcal` 대시보드는 아직 프로덕션에 배포되지 않음** — 로컬 개발환경 검증만 완료된 상태 (아래 "Next Steps"의 "`/gcal` 프로덕션 배포" 항목 참고)
-- **[신규] 캘린더 내 구버전 이벤트 파싱 한계**: 조회된 309건 중 약 152건은 `main_send.py`의 과거 버전이 만든 완전 구버전 포맷(라벨 없음)이라 제목/기간 등 최소 정보만 파싱됨. 나머지 157건(신포맷 `[입찰개시] ...`)은 대부분 필드가 정상 파싱됨(공고번호 154/157, 입찰마감 156/157, 발주기관 150/157)
+- **[신규] 캘린더 내 구버전 이벤트 파싱 한계**: 프로덕션 동기화 기준 310건 중 약 152건은 `main_send.py`의 과거 버전이 만든 완전 구버전 포맷(라벨 없음)이라 제목/기간 등 최소 정보만 파싱됨. 나머지 신포맷(`[입찰개시] ...`) 이벤트는 대부분 필드가 정상 파싱됨 (로컬 검증 기준 157건 중 공고번호 154건, 입찰마감 156건, 발주기관 150건 파싱 성공)
 - **[신규] `/gcal`은 수동 동기화만 지원** — 버튼을 눌러야 최신 캘린더 내용이 반영되며, 자동 주기 동기화(cron 등)는 아직 없음
 
 ## Next Steps
 - 라즈베리파이에 `sync_bids_to_cloudflare.py` 설치 + crontab 등록 (위 안내 참고, `/` 대시보드용)
 - 실사용 1~2주 후, 상태 변경 이력 로그·간단 인증 추가 여부 재검토
 - (선택) 조회/수정 API에 대한 접근 제한 필요 시 Genspark Hosted Access Rules 적용 검토
-- **[신규] `/gcal` 프로덕션 배포**:
-  1. 원격 D1에 마이그레이션 적용: `npx wrangler d1 migrations apply webapp-production` (0004_gcal_bids.sql 포함)
-  2. 프로덕션 시크릿 등록: `npx wrangler pages secret put GCAL_SERVICE_ACCOUNT_JSON`, `npx wrangler pages secret put GCAL_CALENDAR_ID` (값은 `.dev.vars` 참고, 평문 노출 주의)
-  3. `npm run build && npx wrangler pages deploy dist --project-name <project>` (또는 gsk hosted deploy)
-  4. 배포 후 `/gcal`에서 "캘린더 동기화" 버튼 1회 실행해 D1 초기 적재 확인
-- **[신규]** 구버전(라벨 없는) 캘린더 이벤트 152건의 데이터 품질을 어느 정도까지 개선할지 사용자와 협의 (현재는 최소 정보만 표시, 기능상 지장은 없음)
+- 구버전(라벨 없는) 캘린더 이벤트 약 152건의 데이터 품질을 어느 정도까지 개선할지 사용자와 협의 (현재는 최소 정보만 표시, 기능상 지장은 없음)
+- `/gcal` 자동 주기 동기화(cron 등) 도입 여부 검토 (현재는 수동 버튼만 지원)
 
 ## Deployment
 - **Platform**: Cloudflare Pages (Genspark 관리형 계정, Workers for Platform)
 - **Tech Stack**: Hono + TypeScript + Cloudflare D1 + TailwindCSS(CDN)
-- **Status**: ✅ `/`(라즈베리파이 기준) 대시보드는 배포 완료 (D1 마이그레이션 수동 적용 후 정상 동작 검증됨) / ⚠️ `/gcal`(구글 캘린더 기준) 대시보드는 **로컬 개발환경 검증만 완료, 프로덕션 미배포** (원격 D1 마이그레이션 0004 미적용, GCAL_SERVICE_ACCOUNT_JSON/GCAL_CALENDAR_ID 프로덕션 시크릿 미등록)
-- **배포 URL**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com (현재는 `/`만 실제 서비스 중)
+- **Status**: ✅ `/`(라즈베리파이 기준), `/gcal`(구글 캘린더 기준) 모두 배포 완료. `/gcal`은 원격 D1에 `gcal_bids`/`gcal_bid_status` 테이블 생성(0003/0004 마이그레이션 내용 적용) + `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록 + 재배포까지 완료하고, 배포 직후 "캘린더 동기화" API를 1회 호출해 D1에 310건 초기 적재를 완료함
+- **배포 URL**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com (`/`, `/gcal` 모두 실제 서비스 중)
 - **Last Updated**: 2026-08-18
