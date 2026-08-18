@@ -526,18 +526,18 @@ app.get('/', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[1100px] table-fixed">
+        <table class="w-full text-sm min-w-[1150px] table-fixed">
           <colgroup>
             <col class="w-[70px]" />
-            <col class="w-[360px]" />
-            <col class="w-[140px]" />
-            <col class="w-[90px]" />
-            <col class="w-[70px]" />
-            <col class="w-[100px]" />
+            <col class="w-[320px]" />
             <col class="w-[130px]" />
+            <col class="w-[170px]" />
+            <col class="w-[65px]" />
+            <col class="w-[95px]" />
+            <col class="w-[120px]" />
+            <col class="w-[120px]" />
+            <col class="w-[80px]" />
             <col class="w-[130px]" />
-            <col class="w-[90px]" />
-            <col class="w-[140px]" />
             <col class="w-[50px]" />
           </colgroup>
           <thead class="bg-gray-50 text-gray-600">
@@ -666,18 +666,18 @@ app.get('/gcal', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[1100px] table-fixed">
+        <table class="w-full text-sm min-w-[1150px] table-fixed">
           <colgroup>
             <col class="w-[70px]" />
-            <col class="w-[360px]" />
-            <col class="w-[140px]" />
-            <col class="w-[90px]" />
-            <col class="w-[70px]" />
-            <col class="w-[100px]" />
+            <col class="w-[320px]" />
             <col class="w-[130px]" />
+            <col class="w-[170px]" />
+            <col class="w-[65px]" />
+            <col class="w-[95px]" />
+            <col class="w-[120px]" />
+            <col class="w-[120px]" />
+            <col class="w-[80px]" />
             <col class="w-[130px]" />
-            <col class="w-[90px]" />
-            <col class="w-[140px]" />
             <col class="w-[50px]" />
           </colgroup>
           <thead class="bg-gray-50 text-gray-600">

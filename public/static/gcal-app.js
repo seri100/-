@@ -68,7 +68,9 @@ function renderRow(bid) {
       <span class="line-clamp-2" title="${escapeHtml(bid.title)}">${escapeHtml(bid.title)}</span>
     </td>
     <td class="py-2 px-3 truncate" title="${escapeHtml(bid.agency)}">${escapeHtml(bid.agency)}</td>
-    <td class="py-2 px-3 truncate" title="${escapeHtml(bid.participant_region)}">${escapeHtml(bid.participant_region)}</td>
+    <td class="py-2 px-3">
+      <span class="line-clamp-2" title="${escapeHtml(bid.participant_region)}">${escapeHtml(bid.participant_region)}</span>
+    </td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.industry)}">${shortIndustry(bid.industry)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.base_amount)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${formatText(bid.bid_open_recv_date)}</td>
