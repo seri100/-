@@ -246,6 +246,42 @@ const REGION_KEYWORDS = [
   '경기', '강원', '제주', '전국'
 ]
 
+// 공동도급지역 표시용 축약형 매핑 ("세종특별자치시" -> "세종")
+//   - index.tsx REGION_SYNONYMS와 동일한 축약형 집합을 사용해 "전국/세종49%"처럼
+//     짧게 표시한다. 이미 축약형인 값("경기", "충남" 등)은 그대로 둔다.
+const REGION_ABBREVIATIONS: Record<string, string> = {
+  '충청북도': '충북', '충청남도': '충남', '전라북도': '전북', '전라남도': '전남',
+  '경상북도': '경북', '경상남도': '경남', '서울특별시': '서울', '부산광역시': '부산',
+  '대구광역시': '대구', '인천광역시': '인천', '광주광역시': '광주', '대전광역시': '대전',
+  '울산광역시': '울산', '세종특별자치시': '세종', '경기도': '경기',
+  '강원도': '강원', '강원특별자치도': '강원', '제주도': '제주', '제주특별자치도': '제주'
+}
+
+function abbreviateRegion(name: string): string {
+  return REGION_ABBREVIATIONS[name] || name
+}
+
+// "경기,49%" / "세종특별자치시" / "없음" 등 다양한 표기의 공동도급지역 원본값에서
+// "지역명(축약형)" + "비율"을 뽑아 "전국/세종49%" 표시용 접미사(예: "/세종49%")로 조립한다.
+//   - 지역명과 비율이 콤마로 한 줄에 오는 경우("경기,49%")와, 지역명만 있고
+//     비율은 "공동도급비율" 라벨에 별도로 오는 경우(합강중학교 건)를 모두 처리한다.
+//   - "없음"이거나 지역 키워드를 전혀 못 찾으면 접미사 없이 null을 반환한다.
+function buildJointRegionSuffix(jointRegion: string | null, jointRatio: string | null): string | null {
+  if (!jointRegion) return null
+  const trimmed = jointRegion.trim()
+  if (!trimmed || trimmed === '없음') return null
+
+  const commaIdx = trimmed.indexOf(',')
+  const namePart = (commaIdx >= 0 ? trimmed.slice(0, commaIdx) : trimmed).trim()
+  const inlineRatio = commaIdx >= 0 ? trimmed.slice(commaIdx + 1).trim() : ''
+  const ratio = inlineRatio || (jointRatio && jointRatio.trim() !== '없음' ? jointRatio.trim() : '')
+
+  const matchedKeyword = REGION_KEYWORDS.find((kw) => kw !== '전국' && namePart.includes(kw))
+  if (!matchedKeyword) return null
+
+  return `/${abbreviateRegion(matchedKeyword)}${ratio}`
+}
+
 function extractRegionFallback(text: string): string | null {
   if (!text) return null
   // "공동도급지역 : 세종특별자치시" 같은 줄은 참가지역(입찰 참가자격 지역제한)이 아니라
@@ -403,6 +439,7 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
   // "기초금액" 라벨이 기본이나, 일부 수동 등록 이벤트는 "추정금액"으로 표기하므로 폴백 처리
   const baseAmount = extractField(description, '기초금액') || extractField(description, '추정금액')
   const jointRegion = extractField(description, '공동도급지역')
+  const jointRatio = extractField(description, '공동도급비율')
 
   // 참가지역: "참가지역" 라벨 -> 국가철도공단식 "지역" 라벨 -> 본문 전체에서 지역명 직접 탐색
   //          -> 그래도 없으면 지역 제한이 없다는 뜻이므로 "전국"으로 기본 표시한다.
@@ -416,12 +453,15 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
   //      있어 전국 공고인데, 과거에는 이 문구에서 "세종"을 지역으로 오추출하거나
   //      라벨이 있는 다른 건들은 "충남"/"경기" 등 특정 지역만 표시되어 "전국" 필터에서
   //      누락되고 반대로 해당 지역 필터에는 잘못 노출되는 문제가 있었다.)
+  //   - 이때 공동도급지역에 실제 지역/비율 정보가 있으면 "전국/세종49%"처럼
+  //     최저(참여 가능) 비율을 함께 표시해 실무자가 공동수급체 구성 조건을
+  //     한눈에 볼 수 있게 한다(순수 "전국"보다 정보량이 많음).
   const jointRegionExists = !!jointRegion && jointRegion.trim() !== '없음'
   const baseAmountValue = parseAmountValue(baseAmount)
   const isNationalByRule = jointRegionExists || (baseAmountValue !== null && baseAmountValue >= 1_100_000_000)
 
   const participantRegion = isNationalByRule
-    ? '전국'
+    ? `전국${buildJointRegionSuffix(jointRegion, jointRatio) || ''}`
     : extractField(description, '참가지역') ||
       extractField(description, '지역') ||
       extractRegionFallback(description) ||

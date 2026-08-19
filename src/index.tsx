@@ -346,9 +346,17 @@ app.get('/api/gcal-bids', async (c) => {
     //     participant_region이 이미 "전국"으로 정정되므로, 여기서 joint_region까지
     //     OR로 매칭하면 "세종특별자치시" 같은 공동도급지역 문구 때문에 전국 공고가
     //     "세종" 지역 필터에도 잘못 노출되는 버그가 있었다(합강중학교 건).
-    const variants = regionVariants(region)
-    query += ` AND (${variants.map(() => `b.participant_region LIKE ?`).join(' OR ')})`
-    for (const v of variants) params.push(`%${v}%`)
+    //   - participant_region은 "전국/세종49%"처럼 최저 공동도급 비율을 접미사로
+    //     표시하기도 하는데, 이 값도 "세종"이라는 문자열을 포함하므로 위와 같은
+    //     문제가 재발한다. "전국"으로 시작하는 값은 오직 지역필터="전국"일 때만
+    //     매칭되도록 별도 분기 처리한다.
+    if (region === '전국') {
+      query += ` AND b.participant_region LIKE '전국%'`
+    } else {
+      const variants = regionVariants(region)
+      query += ` AND b.participant_region NOT LIKE '전국%' AND (${variants.map(() => `b.participant_region LIKE ?`).join(' OR ')})`
+      for (const v of variants) params.push(`%${v}%`)
+    }
   }
   if (industry) {
     // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
