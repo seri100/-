@@ -248,13 +248,19 @@ const REGION_KEYWORDS = [
 
 function extractRegionFallback(text: string): string | null {
   if (!text) return null
+  // "공동도급지역 : 세종특별자치시" 같은 줄은 참가지역(입찰 참가자격 지역제한)이 아니라
+  // 공동수급체 구성 조건에 관한 별개 항목이므로, 지역 키워드 탐색 대상에서 반드시 제외한다.
+  //   - 이 줄을 포함해 스캔하면 "참가지역" 라벨이 아예 없는 이벤트에서 공동도급지역
+  //     문구 속 지역명을 참가지역으로 잘못 채우는 버그가 있었다. (예: 합강중학교 건 -
+  //     참가지역 라벨 없음 + "공동도급지역 : 세종특별자치시"만 있는데 지역이 "세종"으로 오표시됨)
+  const scanText = text.replace(/^공동도급지역[^\S\r\n]*[:：].*$/gm, '')
   // "[충청북도 청주시]" 같은 대괄호 지역 표기를 우선 그대로 살린다.
-  const bracket = text.match(/\[([^\]]+)\]/)
+  const bracket = scanText.match(/\[([^\]]+)\]/)
   if (bracket && REGION_KEYWORDS.some((kw) => bracket[1].includes(kw))) {
     return bracket[1].trim()
   }
   for (const kw of REGION_KEYWORDS) {
-    if (text.includes(kw)) return kw
+    if (scanText.includes(kw)) return kw
   }
   return null
 }
@@ -383,10 +389,15 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     extractIndustryFallback(description, title)
 
   // 참가지역: "참가지역" 라벨 -> 국가철도공단식 "지역" 라벨 -> 본문 전체에서 지역명 직접 탐색
+  //          -> 그래도 없으면 지역 제한이 없다는 뜻이므로 "전국"으로 기본 표시한다.
+  //   - NULL로 남기면 지역필터="전국" 선택 시 `participant_region LIKE '%전국%'`라는
+  //     리터럴 문자열 검색이라 걸리지 않으므로(REGION_SYNONYMS에 '전국' 키가 없음),
+  //     반드시 문자열 "전국"으로 채워야 필터와 호환된다.
   const participantRegion =
     extractField(description, '참가지역') ||
     extractField(description, '지역') ||
-    extractRegionFallback(description)
+    extractRegionFallback(description) ||
+    '전국'
 
   return {
     event_id: item.id,
