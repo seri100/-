@@ -341,9 +341,14 @@ app.get('/api/gcal-bids', async (c) => {
   }
   if (region) {
     // "충북"/"충청북도"처럼 축약형·정식명칭이 혼재하므로 동의어를 모두 OR로 매칭
+    //   - joint_region(공동도급지역)은 더 이상 매칭 대상에 포함하지 않는다.
+    //     공동도급지역이 실질적으로 존재하는 공고는 저장 시점(gcal.ts parseGcalEvent)에
+    //     participant_region이 이미 "전국"으로 정정되므로, 여기서 joint_region까지
+    //     OR로 매칭하면 "세종특별자치시" 같은 공동도급지역 문구 때문에 전국 공고가
+    //     "세종" 지역 필터에도 잘못 노출되는 버그가 있었다(합강중학교 건).
     const variants = regionVariants(region)
-    query += ` AND (${variants.map(() => `(b.participant_region LIKE ? OR b.joint_region LIKE ?)`).join(' OR ')})`
-    for (const v of variants) params.push(`%${v}%`, `%${v}%`)
+    query += ` AND (${variants.map(() => `b.participant_region LIKE ?`).join(' OR ')})`
+    for (const v of variants) params.push(`%${v}%`)
   }
   if (industry) {
     // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로

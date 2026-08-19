@@ -265,6 +265,18 @@ function extractRegionFallback(text: string): string | null {
   return null
 }
 
+// "3,222,681,000원 (이백육십칠억팔천오십이만원)" 같은 금액 문자열에서 앞쪽 숫자를 정수로 파싱한다.
+// (public/static/gcal-app.js의 formatAmountThousand()와 동일한 패턴)
+function parseAmountValue(v: string | null): number | null {
+  if (!v) return null
+  const m = v.match(/[\d,]+/)
+  if (!m) return null
+  const digits = m[0].replace(/,/g, '')
+  if (!digits) return null
+  const n = parseInt(digits, 10)
+  return Number.isNaN(n) ? null : n
+}
+
 // 공종 표준 명칭(실제 나라장터/한전 등에서 쓰이는 업종명)으로 통일해 반환한다.
 function extractIndustryFallback(text: string, title: string | null): string | null {
   const combined = `${title || ''}\n${text || ''}`
@@ -388,16 +400,32 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     extractIndustryFallback(extractField(description, '면허·첨부서류') || '', null) ||
     extractIndustryFallback(description, title)
 
+  // "기초금액" 라벨이 기본이나, 일부 수동 등록 이벤트는 "추정금액"으로 표기하므로 폴백 처리
+  const baseAmount = extractField(description, '기초금액') || extractField(description, '추정금액')
+  const jointRegion = extractField(description, '공동도급지역')
+
   // 참가지역: "참가지역" 라벨 -> 국가철도공단식 "지역" 라벨 -> 본문 전체에서 지역명 직접 탐색
   //          -> 그래도 없으면 지역 제한이 없다는 뜻이므로 "전국"으로 기본 표시한다.
   //   - NULL로 남기면 지역필터="전국" 선택 시 `participant_region LIKE '%전국%'`라는
   //     리터럴 문자열 검색이라 걸리지 않으므로(REGION_SYNONYMS에 '전국' 키가 없음),
   //     반드시 문자열 "전국"으로 채워야 필터와 호환된다.
-  const participantRegion =
-    extractField(description, '참가지역') ||
-    extractField(description, '지역') ||
-    extractRegionFallback(description) ||
-    '전국'
+  //   - 업무 규칙(실사용자 확인): 공동도급지역이 실질적으로 존재("없음" 제외)하거나
+  //     기초금액(추정가격)이 11억원 이상이면, "참가지역" 라벨에 특정 지역명이 적혀
+  //     있더라도 실제로는 전국 단위 공고이므로 "전국"으로 우선 정정한다.
+  //     (예: 합강중학교 건 - "참가지역" 라벨은 없지만 "공동도급지역 : 세종특별자치시"가
+  //      있어 전국 공고인데, 과거에는 이 문구에서 "세종"을 지역으로 오추출하거나
+  //      라벨이 있는 다른 건들은 "충남"/"경기" 등 특정 지역만 표시되어 "전국" 필터에서
+  //      누락되고 반대로 해당 지역 필터에는 잘못 노출되는 문제가 있었다.)
+  const jointRegionExists = !!jointRegion && jointRegion.trim() !== '없음'
+  const baseAmountValue = parseAmountValue(baseAmount)
+  const isNationalByRule = jointRegionExists || (baseAmountValue !== null && baseAmountValue >= 1_100_000_000)
+
+  const participantRegion = isNationalByRule
+    ? '전국'
+    : extractField(description, '참가지역') ||
+      extractField(description, '지역') ||
+      extractRegionFallback(description) ||
+      '전국'
 
   return {
     event_id: item.id,
@@ -409,13 +437,12 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     industry,
     task_type: extractField(description, '업무구분'),
     bid_method: extractField(description, '낙찰방법'),
-    // "기초금액" 라벨이 기본이나, 일부 수동 등록 이벤트는 "추정금액"으로 표기하므로 폴백 처리
-    base_amount: extractField(description, '기초금액') || extractField(description, '추정금액'),
+    base_amount: baseAmount,
     pure_cost: extractField(description, '순공사원가'),
     a_value: extractField(description, 'A값'),
     lower_rate: extractField(description, '낙찰하한율'),
     participant_region: participantRegion,
-    joint_region: extractField(description, '공동도급지역'),
+    joint_region: jointRegion,
     bid_open_recv_date: normalizeDateSeparator(bidOpenRecvDate),
     bid_deadline: normalizeDateSeparator(bidDeadline),
     agreement_deadline: normalizeDateSeparator(extractField(description, '협정마감일시')),
