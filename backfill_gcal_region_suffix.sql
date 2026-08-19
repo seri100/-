@@ -1,0 +1,214 @@
+-- 참가지역 '전국' 표시에 공동도급지역/최저비율 접미사 추가 (예: 전국/세종49%)
+-- 대상: 103건 (2026-08-19 사용자 요청)
+UPDATE gcal_bids SET participant_region = CASE event_id
+  WHEN 'bid83e05ec5dd8780f2b11b5bb5f0dd941b61e59377' THEN '전국/충남49%'
+  WHEN 'bid8e27473d9ddfc833adfdfcc6f34ca4ffba58bb6d' THEN '전국/강원'
+  WHEN 'bid1db7db674b7af31389b3a2b03f15bb0538a2c5d2' THEN '전국/경남49%'
+  WHEN 'bid574eaca508e76e00bf1c1b05855d9669caca2365' THEN '전국/경남49%'
+  WHEN 'bid11d229c0190c92f53a6059709ddfecc6a99159db' THEN '전국/충남49%'
+  WHEN 'bid4331ed4bec283677c727f6306be945837c5ec844' THEN '전국/충북49%'
+  WHEN 'bid8bcd34b8d46c30f5cc3d84414c6974ca4a895018' THEN '전국/광주49%'
+  WHEN 'bidc091aefc58ef9e519e1562323d70eb2ca0e14e2d' THEN '전국/서울49%'
+  WHEN 'bid6888b2c8f72dac0da33c9c08553284b8d23ec7ac' THEN '전국/전남49%'
+  WHEN 'bid5c61cb81085090db675d4eb2a62c13a5d2bb6ce0' THEN '전국/충남49%'
+  WHEN 'bid71e26e2c622bc6558d372a8e599b7c341d918951' THEN '전국/경남49%'
+  WHEN 'bidb235f396d62afee0cd0e1ccb732282d7ac451707' THEN '전국/경남49%'
+  WHEN 'bidc99171064d5e0b1cb03da23ab876dd61253dc196' THEN '전국/경기49%'
+  WHEN 'bidcf815ca246ff975dcca9b4421b74e4b84e02bd3f' THEN '전국/경기49%'
+  WHEN 'bidf775ccccb279b0dcf06d24108f6214c1250fdb77' THEN '전국/강원30%'
+  WHEN 'bid49fd2ab2cce01ad2d394727aa0347c9fa749e2a8' THEN '전국/경북49%'
+  WHEN 'bid7545324a17f961b7e50620d26c2cdfba9a8bfbe9' THEN '전국/전남30%'
+  WHEN 'bid9898422031d0994781b9053a199af86435b800be' THEN '전국/부산49%'
+  WHEN 'bid3a4ac5b7fc1062cfee9e9b1edf284f019e60f53b' THEN '전국/강원40%'
+  WHEN 'bid2fdede63c19d28a8a0e3c355c994b8c359e08ec0' THEN '전국/서울49%'
+  WHEN 'bid282a07e55aac35d8ffc3f72eaa14f28e9719a233' THEN '전국/경북49%'
+  WHEN 'bida6c571e7162b334c5dd51f25386e5b09a51a7444' THEN '전국/대구30%'
+  WHEN 'bidd4080e85867a1b878df555152d7b387de614659a' THEN '전국/대전49%'
+  WHEN 'bid7be0c97f40d2b05718b09bb441106db89fbab2c3' THEN '전국/강원30%'
+  WHEN 'bidbcdc215c4bd5d0da047f5780ce37ba815e8aab65' THEN '전국/강원49%'
+  WHEN 'bid49c90c6f13bff43222db7697a7571989fa195fd3' THEN '전국/경기49%'
+  WHEN 'bid0ffe8a072b586ab5ecb3437dfbb5ba91effac402' THEN '전국/부산49%'
+  WHEN 'bidaea106ca29154319d5b192f9b322c4612625a83a' THEN '전국/충남49%'
+  WHEN 'bid4ac3a0507f873791687ab43daa73a1cf0988b128' THEN '전국/경기49%'
+  WHEN 'bid6e81eb136fe069c9685b47f557f37a5212dcbec7' THEN '전국/인천49%'
+  WHEN 'bid5469cd76d3a77b6fee997f099b8e283b6fc4e5b3' THEN '전국/충남30%'
+  WHEN 'bid3029aad4a95642672e15d5d2a4e137144d8a8fbd' THEN '전국/인천49%'
+  WHEN 'bid809e2755ac6e5c8872028ea4abef6eab6b5a8d07' THEN '전국/강원30%'
+  WHEN 'bid2bfc0041593c3cc3fd6c0ff1322de53bee5eac3e' THEN '전국/울산30%'
+  WHEN 'bidaa7d74902b1662168ca4936a2dab79bbf340f541' THEN '전국/울산30%'
+  WHEN 'bid4f6609a0ec6194f8c87d42255262c2a1b4f5524b' THEN '전국/강원49%'
+  WHEN 'bid25b25ba0b86f878dbeecb8e3e8945ff1bbadaca3' THEN '전국/강원49%'
+  WHEN 'bid3aae79e932bcbd8259c9607898630cc854139b08' THEN '전국/충북30%'
+  WHEN 'bid0ff47714f091b062fe5ec68cbfa446b50aa50c2e' THEN '전국/서울49%'
+  WHEN 'bide18804dbb26e5fd5279cd1526e91ada05d6527c1' THEN '전국/경기40%'
+  WHEN 'bid3cfdcc0bc727f260e26bc84fe76f178fd22d5629' THEN '전국/경북40%'
+  WHEN 'bid38499afc9af5df2ee2a49d2810684f6fef76a366' THEN '전국/충남49%'
+  WHEN 'bid3f1dd9f451a88d96ac0a3f83d9f5fa3fd3cf6a11' THEN '전국/서울49%'
+  WHEN 'bide08273e47e9369d5a429ffe3e74e14cd09533d6d' THEN '전국/경북49%'
+  WHEN 'bid4fede7f3e131fc12d3175e21ee14e297fb4d750a' THEN '전국/대전30%'
+  WHEN 'bid8ecc7800c4f6ecb3c3c983324ad2d461bf097f71' THEN '전국/전북49%'
+  WHEN 'bid38296eba31e32f6faca60221e1c23912cd4b8330' THEN '전국/부산49%'
+  WHEN 'bid3ece244f3c14b43120416fb6116599d3bb6063fa' THEN '전국/전북30%'
+  WHEN 'bid81c5b478ded97c1f1527f4d68971ea10983b396d' THEN '전국/경남49%'
+  WHEN 'bida05c59ca1b219cf613e3dc7e92f34d9a41d17050' THEN '전국/충북49%'
+  WHEN 'bid5ef7a8f9b364d4c669a495080dd7a63e315b8d89' THEN '전국/서울49%'
+  WHEN 'bidc27aaf972491305386ec539bc2de834608cc2139' THEN '전국/서울49%'
+  WHEN 'biddf60129ba3c5505797e1c5a281b6893b3cb6d16a' THEN '전국/대전49%'
+  WHEN 'bidc582bfb49b7d1dc83f2e4f74a86f84e4afecdc4c' THEN '전국/충북49%'
+  WHEN 'bidccf17a59e239f6490575903e79aae6bd876707ed' THEN '전국/경남49%'
+  WHEN 'bid12c8ad54c77a30391a410f5677ba50366484577e' THEN '전국/대전49%'
+  WHEN 'bid9ccdad2fb61ebd041ae196e9127d921f3c58228a' THEN '전국/경기49%'
+  WHEN 'bidcdb20c7888368c9ba3ed55e580903aaa7ba51570' THEN '전국/경기30%'
+  WHEN 'bid03c1e16833a88f509535d16701286d1419607dc1' THEN '전국/대전30%'
+  WHEN 'bidf831bdad0310d9035744de04c98eb83f650312e7' THEN '전국/전남49%'
+  WHEN 'bidfcdf64a5f160d6d4013a3f20af9b8844900fbdfe' THEN '전국/경기40%'
+  WHEN 'bidf4174ff7fd4c3a1155aef6653194087268fbe422' THEN '전국/강원49%'
+  WHEN 'bid254531ec01b460a648c158709356f4b96095142a' THEN '전국/부산49%'
+  WHEN 'bid81de5d058c15c599a606425f56883c26d640bdfd' THEN '전국/경남30%'
+  WHEN 'bidd201e36ca2bc1b2b04a322a551d64ce3c4522e4e' THEN '전국/전북30%'
+  WHEN 'bid4018bdf8210a7d29c4a40645cded339082dad875' THEN '전국/강원49%'
+  WHEN 'bid421ae098017a02cafaabdea3e0656327749d84f9' THEN '전국/인천49%'
+  WHEN 'bid8fb095a756240992748d140bfb0fcc40a32b54bd' THEN '전국/경기40%'
+  WHEN 'biddd81e31995fbae1bfd5165beb23f40e1e6e37c51' THEN '전국/경기49%'
+  WHEN 'bidf54927c0bc98d2f68ff34f72b8664527bd7f1915' THEN '전국/부산30%'
+  WHEN 'bid15d9750ccd0cb30dacfb15c0d4e478634a472fd5' THEN '전국/부산49%'
+  WHEN 'bid1d7f66a9f40e5e84af1faf6f6b41ad909b83cee4' THEN '전국/충남49%'
+  WHEN 'bid835ea5fb2e6aa3f2f3b30ad733b157f89715bb3e' THEN '전국/인천49%'
+  WHEN 'bid94d5771d66d33c564910e1f5ea8237c246f191bb' THEN '전국/경북49%'
+  WHEN 'bid8ce49e0804daedb737f01e02024896c59c5a401b' THEN '전국/충남49%'
+  WHEN 'bida8f21c9e2f7c0121ecc5427ee7ef8e055d9c0289' THEN '전국/충남49%'
+  WHEN 'bid6cddde5ec39178107cd0c6aae4a6d3575e92390d' THEN '전국/경기49%'
+  WHEN 'bidbdad3149174ddd16f6d97cd527a88d01168c3eb2' THEN '전국/경기49%'
+  WHEN 'bidb8dd24052118199f1f37a7e8f97724babd6a64e5' THEN '전국/부산49%'
+  WHEN 'bid314e63eaa654da09b44d89b533b7a2b81de398df' THEN '전국/경기49%'
+  WHEN '07opevfojn8pu7b3suo666k8g1' THEN '전국/세종49%'
+  WHEN 'bid18fa2b5f0c83bee845f222ada46699f419dd3543' THEN '전국/인천49%'
+  WHEN 'bid27f6eb0110907fbe5a701779d5790f8d9eaf7048' THEN '전국/부산49%'
+  WHEN 'bid0afc9ebfb925007c034cddb54319ac44471667a7' THEN '전국/인천49%'
+  WHEN 'bid29fd4a46c668d316d9090c600302452fe9956192' THEN '전국/인천49%'
+  WHEN 'bidae6c76537ce3379e3a4fd617ad028d9649a43bc8' THEN '전국/인천49%'
+  WHEN 'bidb0912a9f03d18e6921e5618e84468d668560c082' THEN '전국/인천49%'
+  WHEN 'bid7ff182bed76419fcfb17dfced01267e794b65c63' THEN '전국/경기49%'
+  WHEN 'bid95536b04e584bc0c41f3a4e8e370c82be8c9a0b6' THEN '전국/강원31%'
+  WHEN 'bid37ced320d32384ed2357b060ebed3ef51e8a627c' THEN '전국/경기49%'
+  WHEN 'bidd175813f65acede1b81964b3fdff0e4f4f4bfeae' THEN '전국/서울49%'
+  WHEN 'bidafc36416c9a0662d00273d6db6d77bcf5f21256a' THEN '전국/경기49%'
+  WHEN 'bide77de5b05e042d544372ca9fa4440a00f7c5c2da' THEN '전국/경기49%'
+  WHEN 'bidafcb3c92f2f3a843b7185656b69af1127b4c09fd' THEN '전국/경기49%'
+  WHEN 'bide7a5488a05dabacabc7f531453618c87ed983477' THEN '전국/전북30%'
+  WHEN 'bid2ec043ee894871747a7e6f61942fd23608291513' THEN '전국/경기49%'
+  WHEN 'bidc9bf87d70b85dbd29ea90481fa2788418291463c' THEN '전국/제주49%'
+  WHEN 'bid1762b69521754d07af567e38e0faefd65be6e5a4' THEN '전국/인천49%'
+  WHEN 'bid15d5d7c51e85337eed87e7b778b47ecac53a8418' THEN '전국/서울49%'
+  WHEN 'bid895167c1d08e94014fe612041551c8c448a3289b' THEN '전국/경기49%'
+  WHEN 'bid7018073ec433cd25b17b930b6eaf38fe048cd9bf' THEN '전국/부산49%'
+  WHEN 'biddece0e646835a86e423c1a23f4453b013cad9684' THEN '전국/경북49%'
+  WHEN 'bid212a8a5cb45d089752ab15edb17d2553c8931421' THEN '전국/서울49%'
+  ELSE participant_region
+END,
+updated_at = datetime('now')
+WHERE event_id IN (
+  'bid83e05ec5dd8780f2b11b5bb5f0dd941b61e59377',
+  'bid8e27473d9ddfc833adfdfcc6f34ca4ffba58bb6d',
+  'bid1db7db674b7af31389b3a2b03f15bb0538a2c5d2',
+  'bid574eaca508e76e00bf1c1b05855d9669caca2365',
+  'bid11d229c0190c92f53a6059709ddfecc6a99159db',
+  'bid4331ed4bec283677c727f6306be945837c5ec844',
+  'bid8bcd34b8d46c30f5cc3d84414c6974ca4a895018',
+  'bidc091aefc58ef9e519e1562323d70eb2ca0e14e2d',
+  'bid6888b2c8f72dac0da33c9c08553284b8d23ec7ac',
+  'bid5c61cb81085090db675d4eb2a62c13a5d2bb6ce0',
+  'bid71e26e2c622bc6558d372a8e599b7c341d918951',
+  'bidb235f396d62afee0cd0e1ccb732282d7ac451707',
+  'bidc99171064d5e0b1cb03da23ab876dd61253dc196',
+  'bidcf815ca246ff975dcca9b4421b74e4b84e02bd3f',
+  'bidf775ccccb279b0dcf06d24108f6214c1250fdb77',
+  'bid49fd2ab2cce01ad2d394727aa0347c9fa749e2a8',
+  'bid7545324a17f961b7e50620d26c2cdfba9a8bfbe9',
+  'bid9898422031d0994781b9053a199af86435b800be',
+  'bid3a4ac5b7fc1062cfee9e9b1edf284f019e60f53b',
+  'bid2fdede63c19d28a8a0e3c355c994b8c359e08ec0',
+  'bid282a07e55aac35d8ffc3f72eaa14f28e9719a233',
+  'bida6c571e7162b334c5dd51f25386e5b09a51a7444',
+  'bidd4080e85867a1b878df555152d7b387de614659a',
+  'bid7be0c97f40d2b05718b09bb441106db89fbab2c3',
+  'bidbcdc215c4bd5d0da047f5780ce37ba815e8aab65',
+  'bid49c90c6f13bff43222db7697a7571989fa195fd3',
+  'bid0ffe8a072b586ab5ecb3437dfbb5ba91effac402',
+  'bidaea106ca29154319d5b192f9b322c4612625a83a',
+  'bid4ac3a0507f873791687ab43daa73a1cf0988b128',
+  'bid6e81eb136fe069c9685b47f557f37a5212dcbec7',
+  'bid5469cd76d3a77b6fee997f099b8e283b6fc4e5b3',
+  'bid3029aad4a95642672e15d5d2a4e137144d8a8fbd',
+  'bid809e2755ac6e5c8872028ea4abef6eab6b5a8d07',
+  'bid2bfc0041593c3cc3fd6c0ff1322de53bee5eac3e',
+  'bidaa7d74902b1662168ca4936a2dab79bbf340f541',
+  'bid4f6609a0ec6194f8c87d42255262c2a1b4f5524b',
+  'bid25b25ba0b86f878dbeecb8e3e8945ff1bbadaca3',
+  'bid3aae79e932bcbd8259c9607898630cc854139b08',
+  'bid0ff47714f091b062fe5ec68cbfa446b50aa50c2e',
+  'bide18804dbb26e5fd5279cd1526e91ada05d6527c1',
+  'bid3cfdcc0bc727f260e26bc84fe76f178fd22d5629',
+  'bid38499afc9af5df2ee2a49d2810684f6fef76a366',
+  'bid3f1dd9f451a88d96ac0a3f83d9f5fa3fd3cf6a11',
+  'bide08273e47e9369d5a429ffe3e74e14cd09533d6d',
+  'bid4fede7f3e131fc12d3175e21ee14e297fb4d750a',
+  'bid8ecc7800c4f6ecb3c3c983324ad2d461bf097f71',
+  'bid38296eba31e32f6faca60221e1c23912cd4b8330',
+  'bid3ece244f3c14b43120416fb6116599d3bb6063fa',
+  'bid81c5b478ded97c1f1527f4d68971ea10983b396d',
+  'bida05c59ca1b219cf613e3dc7e92f34d9a41d17050',
+  'bid5ef7a8f9b364d4c669a495080dd7a63e315b8d89',
+  'bidc27aaf972491305386ec539bc2de834608cc2139',
+  'biddf60129ba3c5505797e1c5a281b6893b3cb6d16a',
+  'bidc582bfb49b7d1dc83f2e4f74a86f84e4afecdc4c',
+  'bidccf17a59e239f6490575903e79aae6bd876707ed',
+  'bid12c8ad54c77a30391a410f5677ba50366484577e',
+  'bid9ccdad2fb61ebd041ae196e9127d921f3c58228a',
+  'bidcdb20c7888368c9ba3ed55e580903aaa7ba51570',
+  'bid03c1e16833a88f509535d16701286d1419607dc1',
+  'bidf831bdad0310d9035744de04c98eb83f650312e7',
+  'bidfcdf64a5f160d6d4013a3f20af9b8844900fbdfe',
+  'bidf4174ff7fd4c3a1155aef6653194087268fbe422',
+  'bid254531ec01b460a648c158709356f4b96095142a',
+  'bid81de5d058c15c599a606425f56883c26d640bdfd',
+  'bidd201e36ca2bc1b2b04a322a551d64ce3c4522e4e',
+  'bid4018bdf8210a7d29c4a40645cded339082dad875',
+  'bid421ae098017a02cafaabdea3e0656327749d84f9',
+  'bid8fb095a756240992748d140bfb0fcc40a32b54bd',
+  'biddd81e31995fbae1bfd5165beb23f40e1e6e37c51',
+  'bidf54927c0bc98d2f68ff34f72b8664527bd7f1915',
+  'bid15d9750ccd0cb30dacfb15c0d4e478634a472fd5',
+  'bid1d7f66a9f40e5e84af1faf6f6b41ad909b83cee4',
+  'bid835ea5fb2e6aa3f2f3b30ad733b157f89715bb3e',
+  'bid94d5771d66d33c564910e1f5ea8237c246f191bb',
+  'bid8ce49e0804daedb737f01e02024896c59c5a401b',
+  'bida8f21c9e2f7c0121ecc5427ee7ef8e055d9c0289',
+  'bid6cddde5ec39178107cd0c6aae4a6d3575e92390d',
+  'bidbdad3149174ddd16f6d97cd527a88d01168c3eb2',
+  'bidb8dd24052118199f1f37a7e8f97724babd6a64e5',
+  'bid314e63eaa654da09b44d89b533b7a2b81de398df',
+  '07opevfojn8pu7b3suo666k8g1',
+  'bid18fa2b5f0c83bee845f222ada46699f419dd3543',
+  'bid27f6eb0110907fbe5a701779d5790f8d9eaf7048',
+  'bid0afc9ebfb925007c034cddb54319ac44471667a7',
+  'bid29fd4a46c668d316d9090c600302452fe9956192',
+  'bidae6c76537ce3379e3a4fd617ad028d9649a43bc8',
+  'bidb0912a9f03d18e6921e5618e84468d668560c082',
+  'bid7ff182bed76419fcfb17dfced01267e794b65c63',
+  'bid95536b04e584bc0c41f3a4e8e370c82be8c9a0b6',
+  'bid37ced320d32384ed2357b060ebed3ef51e8a627c',
+  'bidd175813f65acede1b81964b3fdff0e4f4f4bfeae',
+  'bidafc36416c9a0662d00273d6db6d77bcf5f21256a',
+  'bide77de5b05e042d544372ca9fa4440a00f7c5c2da',
+  'bidafcb3c92f2f3a843b7185656b69af1127b4c09fd',
+  'bide7a5488a05dabacabc7f531453618c87ed983477',
+  'bid2ec043ee894871747a7e6f61942fd23608291513',
+  'bidc9bf87d70b85dbd29ea90481fa2788418291463c',
+  'bid1762b69521754d07af567e38e0faefd65be6e5a4',
+  'bid15d5d7c51e85337eed87e7b778b47ecac53a8418',
+  'bid895167c1d08e94014fe612041551c8c448a3289b',
+  'bid7018073ec433cd25b17b930b6eaf38fe048cd9bf',
+  'biddece0e646835a86e423c1a23f4453b013cad9684',
+  'bid212a8a5cb45d089752ab15edb17d2553c8931421'
+);
