@@ -318,9 +318,31 @@ function extractIndustryFallback(text: string, title: string | null): string | n
   const combined = `${title || ''}\n${text || ''}`
   if (!combined.trim()) return null
   if (combined.includes('소방')) return '전문소방시설공사업'
-  if (combined.includes('기계')) return '기계설비공사업'
+  // "기계"라는 글자가 직접 없어도 실제로는 기계설비공사업으로 분류되는
+  // 특정 시설명이 있다(LH 상세페이지 "요구면허" 표 기준으로 확인됨).
+  //   - "자동크린넷": 아파트 단지 쓰레기 자동이송설비 -> 기계설비·가스공사업
+  //     (예: "충남도청(내포)신도시 RH-12BL 단지내 자동크린넷 시설공사"는
+  //      LH 캘린더의 "업종유형" 라벨이 "전문공사"로만 표시되어 있으나,
+  //      LH 자체 상세페이지의 "요구면허" 표에는 "기계설비·가스공사업"이라고
+  //      명시되어 있다. 캘린더 description에는 이 요구면허 정보가 없으므로
+  //      제목의 "크린넷" 키워드로 유추한다.)
+  if (combined.includes('기계') || combined.includes('크린넷')) return '기계설비공사업'
   if (combined.includes('전기')) return '전기공사업'
   return null
+}
+
+// LH의 "업종유형" 라벨은 종종 "전문공사"/"종합공사"(+"(상대업종 불허)" 등 부가문구)처럼
+// 구체적 공종(기계/전기/소방)을 전혀 알 수 없는 대분류값만 제공한다.
+//   - 예: "충남도청(내포)신도시 RH-12BL 단지내 자동크린넷 시설공사"는 업종유형이
+//     "전문공사"로만 표시되지만, LH 상세페이지의 "요구면허" 표에는 "기계설비·가스공사업"
+//     이라고 명시되어 있다(캘린더 description에는 이 요구면허 정보 자체가 없음).
+//   - 이런 뭉뚱그린 값을 그대로 저장하면 화면의 공종 필터(기계/소방/전기)와 매칭되지
+//     않아 필터에서 실종된다. 아래 정규식에 해당하면 "값이 없는 것"으로 간주해
+//     제목/본문 키워드 유추(extractIndustryFallback)로 재시도한다.
+const GENERIC_INDUSTRY_RE = /^(전문공사|종합공사)(\s*\([^)]*\))?$/
+function isGenericIndustryLabel(v: string | null): boolean {
+  if (!v) return false
+  return GENERIC_INDUSTRY_RE.test(v.trim())
 }
 
 export interface ParsedGcalBid {
@@ -438,13 +460,16 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     if (!bidDeadline) bidDeadline = range.end
   }
 
-  // 업종: "업종" 라벨 -> LH식 "업종유형" 라벨 -> 한전식 "면허·첨부서류"(업종코드 포함) ->
+  // 업종: "업종" 라벨 -> LH식 "업종유형" 라벨(단, "전문공사"/"종합공사"처럼 세부 공종을
+  //       알 수 없는 대분류값이면 건너뛴다) -> 한전식 "면허·첨부서류"(업종코드 포함) ->
   //       그래도 없으면 제목/본문 키워드(소방/기계/전기)로 유추
+  const industryTypeLabel = extractField(description, '업종유형')
   const industry =
     extractField(description, '업종') ||
-    extractField(description, '업종유형') ||
+    (isGenericIndustryLabel(industryTypeLabel) ? null : industryTypeLabel) ||
     extractIndustryFallback(extractField(description, '면허·첨부서류') || '', null) ||
-    extractIndustryFallback(description, title)
+    extractIndustryFallback(description, title) ||
+    industryTypeLabel
 
   // "기초금액" 라벨이 기본이나, 일부 수동 등록 이벤트는 "추정금액"으로 표기하므로 폴백 처리
   const baseAmount = extractField(description, '기초금액') || extractField(description, '추정금액')
