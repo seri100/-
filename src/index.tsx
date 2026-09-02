@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { renderer } from './renderer'
-import { syncGcalBids } from './gcal'
+import { syncGcalBids, reparseStoredGcalBids } from './gcal'
 
 type Bindings = {
   DB: D1Database
@@ -302,7 +302,12 @@ app.post('/api/gcal-bids/sync', async (c) => {
 
   try {
     const result = await syncGcalBids(env)
-    return c.json({ success: true, ...result })
+    // 구글 캘린더 API는 최근 -30일~+180일 이벤트만 조회하므로, 그보다 오래전에
+    // 마감된 이벤트는 위 syncGcalBids()의 upsert 대상에서 빠진다. 이런 레코드도
+    // 파싱 로직 개선(예: 업종 키워드 추가) 혜택을 받도록, DB에 이미 저장된
+    // raw_description을 최신 로직으로 재파싱해 파생 필드만 갱신한다.
+    const reparsed = await reparseStoredGcalBids(env)
+    return c.json({ success: true, ...result, reparsed_scanned: reparsed.scanned, reparsed_updated: reparsed.updated })
   } catch (e: any) {
     return c.json({ success: false, error: String(e?.message || e) }, 500)
   }

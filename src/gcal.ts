@@ -326,7 +326,11 @@ function extractIndustryFallback(text: string, title: string | null): string | n
   //      LH 자체 상세페이지의 "요구면허" 표에는 "기계설비·가스공사업"이라고
   //      명시되어 있다. 캘린더 description에는 이 요구면허 정보가 없으므로
   //      제목의 "크린넷" 키워드로 유추한다.)
-  if (combined.includes('기계') || combined.includes('크린넷')) return '기계설비공사업'
+  //   - "열량계"(적산열량계/열계량기): 지역난방 냉·난방 배관에 설치하는 계량 설비로,
+  //     기계설비공사업 업무영역에 속한다(관련 전문건설업체 실적 자료로 확인됨).
+  //     예: "2026년 적산열량계 설치 및 교체공사" - LH 업종유형이 "전문공사"로만
+  //     표시되어 다른 기계설비 키워드가 전혀 없는 케이스라 별도로 추가한다.
+  if (combined.includes('기계') || combined.includes('크린넷') || combined.includes('열량계')) return '기계설비공사업'
   if (combined.includes('전기')) return '전기공사업'
   return null
 }
@@ -412,9 +416,22 @@ function extractDateRangeFallback(text: string): { start: string | null; end: st
   return { start: m[1].trim().replace(/\s*:\s*/g, ':'), end: m[2].trim().replace(/\s*:\s*/g, ':') }
 }
 
-export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
-  const description = normalizeGcalDescription(item.description || '')
+// description(정규화된 텍스트)과 summary만으로 파싱 가능한 필드들.
+// item(캘린더 API 원본 이벤트)에 의존하는 나머지 필드(event_id/location/
+// event_start/event_end/html_link/raw_description)는 parseGcalEvent에서 덧붙인다.
+//   - 이렇게 분리해두면 DB에 이미 저장된 raw_description을 다시 넣어 재파싱하는
+//     reparseStoredGcalBids()에서도 동일한 파싱 로직(라벨 추출/폴백 등)을 그대로
+//     재사용할 수 있다. 그래야 "구글 캘린더 조회 범위(최근 -30일~+180일) 밖으로
+//     밀려난 오래된 이벤트"도 파싱 로직 개선의 혜택을 받을 수 있다.
+//     (예: "2026년 적산열량계 설치 및 교체공사" - 입찰서접수마감일시가 2026/07/23로
+//      이미 과거라 캘린더 API 재조회 대상에서 빠지므로, syncGcalBids()만으로는
+//      "열량계" 키워드 추가 같은 파싱 로직 개선이 반영되지 않는 문제가 있었다.)
+type ParsedGcalFields = Omit<
+  ParsedGcalBid,
+  'event_id' | 'location' | 'event_start' | 'event_end' | 'html_link' | 'raw_description' | 'summary'
+>
 
+function parseGcalDescription(description: string, summaryRaw: string | null): ParsedGcalFields {
   const detailUrl = extractField(description, '상세URL')
 
   const noticeRaw = extractField(description, '공고번호')
@@ -445,7 +462,7 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
   const title =
     extractField(description, '공고명') ||
     extractField(description, '입찰공고건명') ||
-    (item.summary ? item.summary.replace(/^[^\[]*\[입찰개시\]\s*/, '') : null)
+    (summaryRaw ? summaryRaw.replace(/^[^\[]*\[입찰개시\]\s*/, '') : null)
 
   // 입찰서접수개시일시/입찰마감일시 라벨이 있으면 그대로, 없으면
   // "시작 ~ 끝" 형태의 날짜범위 줄에서 폴백으로 채운다.
@@ -503,11 +520,9 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
       '전국'
 
   return {
-    event_id: item.id,
     bid_no: bidNo,
     bid_ord: bidOrd,
     title,
-    summary: item.summary || null,
     agency: extractField(description, '발주기관'),
     industry,
     task_type: extractField(description, '업무구분'),
@@ -521,12 +536,23 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     bid_open_recv_date: normalizeDateSeparator(bidOpenRecvDate),
     bid_deadline: normalizeDateSeparator(bidDeadline),
     agreement_deadline: normalizeDateSeparator(extractField(description, '협정마감일시')),
-    detail_url: detailUrl,
+    detail_url: detailUrl
+  }
+}
+
+export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
+  const description = normalizeGcalDescription(item.description || '')
+  const fields = parseGcalDescription(description, item.summary || null)
+
+  return {
+    event_id: item.id,
+    summary: item.summary || null,
     location: item.location || null,
     event_start: item.start?.dateTime || item.start?.date || null,
     event_end: item.end?.dateTime || item.end?.date || null,
     html_link: item.htmlLink || null,
-    raw_description: description || null
+    raw_description: description || null,
+    ...fields
   }
 }
 
@@ -613,4 +639,70 @@ export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number
   }
 
   return { fetched: events.length, synced: parsed.length }
+}
+
+// ------------------------------------------------------------------
+// 저장된 raw_description 재파싱(구글 캘린더 API 재조회 없이)
+//   - listCalendarEvents()는 timeMin(현재 -30일)~timeMax(현재 +180일) 범위만 조회하므로,
+//     입찰서접수마감일시가 이미 30일보다 더 지난 오래된 이벤트는 캘린더 API 응답에서
+//     자체가 빠져 syncGcalBids()의 upsert 대상이 되지 못한다. 그 결과 파싱 로직(예: 업종
+//     키워드 추가/제목 정제 등)을 고쳐도 이런 오래된 레코드에는 영영 반영되지 않는다.
+//     (예: "2026년 적산열량계 설치 및 교체공사" - 마감일 2026/07/23로 이미 30일 범위 밖)
+//   - DB에는 원본 raw_description이 이미 저장되어 있으므로, 캘린더 API를 다시 부르지
+//     않고 그 텍스트만 최신 parseGcalDescription()으로 다시 돌려 파생 필드(제목/업종/
+//     지역 등)를 갱신한다. summary/location/event_start/event_end/html_link처럼
+//     description에 없는 원본 이벤트 메타데이터는 그대로 보존한다.
+export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanned: number; updated: number }> {
+  const { results } = await env.DB.prepare(
+    `SELECT event_id, raw_description, summary,
+            bid_no, bid_ord, title, agency, industry, task_type, bid_method,
+            base_amount, pure_cost, a_value, lower_rate, participant_region,
+            joint_region, bid_open_recv_date, bid_deadline, agreement_deadline, detail_url
+     FROM gcal_bids
+     WHERE raw_description IS NOT NULL AND raw_description != ''`
+  ).all<Record<string, string | null>>()
+
+  const rows = results || []
+  if (rows.length === 0) {
+    return { scanned: 0, updated: 0 }
+  }
+
+  const FIELD_KEYS: (keyof ParsedGcalFields)[] = [
+    'bid_no', 'bid_ord', 'title', 'agency', 'industry', 'task_type', 'bid_method',
+    'base_amount', 'pure_cost', 'a_value', 'lower_rate', 'participant_region',
+    'joint_region', 'bid_open_recv_date', 'bid_deadline', 'agreement_deadline', 'detail_url'
+  ]
+
+  const stmt = env.DB.prepare(`
+    UPDATE gcal_bids SET
+      bid_no = ?, bid_ord = ?, title = ?, agency = ?, industry = ?, task_type = ?,
+      bid_method = ?, base_amount = ?, pure_cost = ?, a_value = ?, lower_rate = ?,
+      participant_region = ?, joint_region = ?, bid_open_recv_date = ?, bid_deadline = ?,
+      agreement_deadline = ?, detail_url = ?, updated_at = datetime('now')
+    WHERE event_id = ?
+  `)
+
+  const toUpdate: D1PreparedStatement[] = []
+  for (const row of rows) {
+    const fresh = parseGcalDescription(row.raw_description || '', row.summary)
+    const changed = FIELD_KEYS.some((k) => (fresh[k] ?? null) !== (row[k] ?? null))
+    if (!changed) continue
+
+    toUpdate.push(
+      stmt.bind(
+        fresh.bid_no, fresh.bid_ord, fresh.title, fresh.agency, fresh.industry,
+        fresh.task_type, fresh.bid_method, fresh.base_amount, fresh.pure_cost,
+        fresh.a_value, fresh.lower_rate, fresh.participant_region, fresh.joint_region,
+        fresh.bid_open_recv_date, fresh.bid_deadline, fresh.agreement_deadline,
+        fresh.detail_url, row.event_id
+      )
+    )
+  }
+
+  const CHUNK = 100
+  for (let i = 0; i < toUpdate.length; i += CHUNK) {
+    await env.DB.batch(toUpdate.slice(i, i + CHUNK))
+  }
+
+  return { scanned: rows.length, updated: toUpdate.length }
 }

@@ -184,7 +184,8 @@ async function syncCalendar() {
   syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>동기화 중...'
   try {
     const res = await axios.post(`${GCAL_BID_API_BASE}/sync`)
-    alert(`캘린더 동기화 완료: ${res.data.fetched}건 조회, ${res.data.synced}건 반영`)
+    const reparsedNote = res.data.reparsed_updated ? `, 과거건 재분류 ${res.data.reparsed_updated}건` : ''
+    alert(`캘린더 동기화 완료: ${res.data.fetched}건 조회, ${res.data.synced}건 반영${reparsedNote}`)
     await loadBids()
   } catch (err) {
     console.error('캘린더 동기화 실패:', err)
