@@ -414,14 +414,24 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     bidOrd = fromUrl.bidOrd
   }
 
+  // 제목: "공고명" 라벨이 기본이나, LH(한국토지주택공사) 공고는 "입찰공고건명"
+  // 이라는 별도 라벨을 쓴다. 둘 다 없으면 캘린더 이벤트 제목(summary)에서
+  // "[입찰개시]" 접두어만 제거해 최후 폴백으로 사용한다.
+  //   - 이 폴백이 없으면 LH 공고는 summary 원문(예: "<LH>[입찰개시]ㅇ?충남도청...-10")이
+  //     그대로 title에 남아 "<LH>", "ㅇ?", "-10" 같은 잡음이 섞인 제목으로 저장되고,
+  //     실제 공고명으로 검색해도 찾을 수 없는 문제가 있었다.
   const title =
     extractField(description, '공고명') ||
+    extractField(description, '입찰공고건명') ||
     (item.summary ? item.summary.replace(/^[^\[]*\[입찰개시\]\s*/, '') : null)
 
   // 입찰서접수개시일시/입찰마감일시 라벨이 있으면 그대로, 없으면
   // "시작 ~ 끝" 형태의 날짜범위 줄에서 폴백으로 채운다.
+  //   - LH 공고는 "입찰마감일시" 대신 "입찰서접수마감일시"라는 라벨을 쓴다.
+  //     이 폴백이 없으면 bid_deadline이 NULL로 저장되어, 화면의 "기간(마감일 기준)"
+  //     필터를 하나라도 지정하면 해당 공고가 검색 결과에서 완전히 누락되는 문제가 있었다.
   let bidOpenRecvDate = extractField(description, '입찰서접수개시일시')
-  let bidDeadline = extractField(description, '입찰마감일시')
+  let bidDeadline = extractField(description, '입찰마감일시') || extractField(description, '입찰서접수마감일시')
   if (!bidOpenRecvDate || !bidDeadline) {
     const range = extractDateRangeFallback(description)
     if (!bidOpenRecvDate) bidOpenRecvDate = range.start
