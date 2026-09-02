@@ -13,6 +13,7 @@
   - "입찰개시일"(입찰서접수개시일시) 컬럼 표시
   - 라즈베리파이 → Cloudflare 간 데이터 업로드용 REST API 및 동기화 스크립트 제공
   - **[신규] 구글 캘린더 기준 별도 대시보드 (`/gcal`)**: 라즈베리파이 CSV를 거치지 않고 Cloudflare Worker가 Google Calendar API를 직접 호출해 입찰개시 이벤트를 가져와, 동일한 상태/담당자/메모 관리 기능을 제공. 기존 대시보드(`/`)와 완전히 독립된 데이터/테이블 사용
+  - **[신규] PC/모바일 아이콘**: 브라우저 탭 파비콘, 모바일 홈화면 추가용 앱 아이콘(iOS/Android), PWA manifest 제공 — 모바일에서 "홈 화면에 추가"로 앱처럼 접근 가능
 
 ## URLs
 - **배포 URL (프로덕션)**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com
@@ -243,4 +244,10 @@ ck4642060@gmail.com
 - **Tech Stack**: Hono + TypeScript + Cloudflare D1 + TailwindCSS(CDN)
 - **Status**: ✅ `/`(라즈베리파이 기준), `/gcal`(구글 캘린더 기준) 모두 배포 완료. `/gcal`은 원격 D1에 `gcal_bids`/`gcal_bid_status` 테이블 생성(0003/0004 마이그레이션 내용 적용) + `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록 + 재배포까지 완료하고, 배포 직후 "캘린더 동기화" API를 1회 호출해 D1에 310건 초기 적재를 완료함
 - **배포 URL**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com (`/`, `/gcal` 모두 실제 서비스 중)
-- **Last Updated**: 2026-08-18
+- **Last Updated**: 2026-09-02
+
+### PC/모바일 아이콘 (신규)
+- `public/favicon.ico`(16/32/48 멀티사이즈), `public/static/icons/*.png`(16/32/48/180/192/512), `public/static/manifest.json`(PWA) 추가
+- `src/renderer.tsx`(`/`, `/gcal` 공용 head), `src/index.tsx`의 `/manual` head에 `<link rel="icon">`, `<link rel="apple-touch-icon">`, `<link rel="manifest">`, `theme-color` 메타태그 삽입
+- **모바일에서 사용법**: iOS Safari → 공유 버튼 → "홈 화면에 추가" / Android Chrome → 메뉴(⋮) → "앱 설치" 또는 "홈 화면에 추가"를 누르면 위 아이콘이 적용된 앱처럼 홈 화면에 추가됨
+- 참고: Cloudflare Pages 빌드 시 `_routes.json`이 정적 파일 추가 후에도 재생성되지 않는 이슈가 있어 `dist/_routes.json`을 삭제 후 재빌드해야 신규 정적 파일(`/favicon.ico` 등)이 Worker를 거치지 않고 직접 서빙됨 (`@hono/vite-build/cloudflare-pages` 플러그인이 기존 `_routes.json` 존재 시 재생성을 스킵하는 동작)
