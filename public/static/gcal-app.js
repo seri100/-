@@ -17,6 +17,7 @@ const syncBtn = document.getElementById('gcal-sync-btn')
 const modalEl = document.getElementById('gcal-edit-modal')
 const editEventIdEl = document.getElementById('gcal-edit-event-id')
 const editBidTitleEl = document.getElementById('gcal-edit-bid-title')
+const editCalendarTagsEl = document.getElementById('gcal-edit-calendar-tags')
 const editStatusEl = document.getElementById('gcal-edit-status')
 const editAssigneeEl = document.getElementById('gcal-edit-assignee')
 const editMemoEl = document.getElementById('gcal-edit-memo')
@@ -101,6 +102,7 @@ function renderRow(bid) {
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_deadline)}">${formatDate(bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
     <td class="py-2 px-3 max-w-[160px]">
+      ${bid.calendar_tags ? `<div class="text-[11px] text-blue-600 mb-0.5" title="${escapeHtml(bid.calendar_tags)}"><i class="fas fa-tag mr-0.5"></i>${escapeHtml(bid.calendar_tags)}</div>` : ''}
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
     </td>
     <td class="py-2 px-3">
@@ -148,6 +150,12 @@ async function loadBids() {
 function openEditModal(bid) {
   editEventIdEl.value = bid.event_id
   editBidTitleEl.textContent = bid.title || ''
+  if (bid.calendar_tags) {
+    editCalendarTagsEl.querySelector('span').textContent = bid.calendar_tags
+    editCalendarTagsEl.classList.remove('hidden')
+  } else {
+    editCalendarTagsEl.classList.add('hidden')
+  }
   editStatusEl.value = bid.status || '검토중'
   editAssigneeEl.value = bid.assignee || ''
   editMemoEl.value = bid.memo || ''
@@ -185,7 +193,8 @@ async function syncCalendar() {
   try {
     const res = await axios.post(`${GCAL_BID_API_BASE}/sync`)
     const reparsedNote = res.data.reparsed_updated ? `, 과거건 재분류 ${res.data.reparsed_updated}건` : ''
-    alert(`캘린더 동기화 완료: ${res.data.fetched}건 조회, ${res.data.synced}건 반영${reparsedNote}`)
+    const promotedNote = res.data.promoted ? `, 적색표시 제출완료 자동전환 ${res.data.promoted}건` : ''
+    alert(`캘린더 동기화 완료: ${res.data.fetched}건 조회, ${res.data.synced}건 반영${promotedNote}${reparsedNote}`)
     await loadBids()
   } catch (err) {
     console.error('캘린더 동기화 실패:', err)

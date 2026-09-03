@@ -307,7 +307,12 @@ app.post('/api/gcal-bids/sync', async (c) => {
     // 파싱 로직 개선(예: 업종 키워드 추가) 혜택을 받도록, DB에 이미 저장된
     // raw_description을 최신 로직으로 재파싱해 파생 필드만 갱신한다.
     const reparsed = await reparseStoredGcalBids(env)
-    return c.json({ success: true, ...result, reparsed_scanned: reparsed.scanned, reparsed_updated: reparsed.updated })
+    return c.json({
+      success: true,
+      ...result,
+      reparsed_scanned: reparsed.scanned,
+      reparsed_updated: reparsed.updated
+    })
   } catch (e: any) {
     return c.json({ success: false, error: String(e?.message || e) }, 500)
   }
@@ -727,7 +732,8 @@ app.get('/gcal', (c) => {
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
           <h3 class="text-lg font-semibold mb-4">진행상태 수정</h3>
           <input type="hidden" id="gcal-edit-event-id" />
-          <p id="gcal-edit-bid-title" class="text-sm text-gray-600 mb-4 line-clamp-2"></p>
+          <p id="gcal-edit-bid-title" class="text-sm text-gray-600 mb-2 line-clamp-2"></p>
+          <p id="gcal-edit-calendar-tags" class="text-xs text-blue-600 mb-4 hidden"><i class="fas fa-tag mr-1"></i><span></span></p>
 
           <div class="mb-3">
             <label class="block text-xs text-gray-500 mb-1">상태</label>

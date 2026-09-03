@@ -134,6 +134,7 @@ interface GcalEventItem {
   location?: string
   htmlLink?: string
   status?: string
+  colorId?: string
   start?: { dateTime?: string; date?: string }
   end?: { dateTime?: string; date?: string }
 }
@@ -374,6 +375,50 @@ export interface ParsedGcalBid {
   event_end: string | null
   html_link: string | null
   raw_description: string | null
+  color_id: string | null
+  calendar_tags: string | null
+}
+
+// ------------------------------------------------------------------
+// 구글 캘린더 이벤트 제목(summary)에 팀 내부 규칙으로 붙이는 기호/색상 파싱
+//   - 실사용자 확인(구글 캘린더 이벤트 색상/기호 규칙, 2026-09):
+//     적색(colorId=11)      = 입찰 제출완료 표시
+//     &                      = 백영현 담당(이번 구현 범위 제외, 사용자 미확인 항목)
+//     ㅇ                     = 세리공영 참가 공고 표시
+//     ?                      = 진유 참가 공고 표시
+//     ㅁ                     = 전국으로 공고되어 협정맺은 공고 표시
+//     #                      = 입찰참가자에게 입찰가격을 제시하는 표시(견적제시)
+//     "80.495" 같은 소수점 숫자 = 투찰율
+//   - 이 정보는 캘린더 제목에만 있고 description(본문)에는 없으므로, summary
+//     원문에서 직접 뽑아 gcal_bids.calendar_tags에 저장한다. 팀원이 수동으로
+//     입력하는 gcal_bid_status.memo(자유 메모)와는 완전히 별도 컬럼이라 서로
+//     덮어쓰지 않는다.
+// ------------------------------------------------------------------
+
+// 투찰율은 "숫자.숫자숫자숫자" 뒤에 '/' 또는 ',' 가 바로(공백 허용) 오는 형태로만
+// 나타난다(예: "80.495/전주동북초...", "84.245 /「화성푸드...」"). 단순 일자/코드
+// 번호(예: "3/4", "26-충-공-3B")는 소수점이 없어 이 정규식에 걸리지 않는다.
+const BID_RATE_RE = /(\d{2,3}\.\d{3})\s*%?(?=\s*[/,])/g
+
+function extractBidRates(summaryRaw: string): string[] {
+  const rates: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = BID_RATE_RE.exec(summaryRaw))) {
+    rates.push(m[1])
+  }
+  return rates
+}
+
+function extractCalendarTags(summaryRaw: string | null): string | null {
+  if (!summaryRaw) return null
+  const notes: string[] = []
+  if (summaryRaw.includes('ㅇ')) notes.push('세리공영 참가')
+  if (summaryRaw.includes('?')) notes.push('진유 참가')
+  if (summaryRaw.includes('ㅁ')) notes.push('협정(전국 공고)')
+  if (summaryRaw.includes('#')) notes.push('견적제시')
+  const rates = extractBidRates(summaryRaw)
+  if (rates.length > 0) notes.push(`투찰율 ${rates.join('%, ')}%`)
+  return notes.length > 0 ? notes.join(' / ') : null
 }
 
 // 상세URL의 쿼리파라미터(bidPbancNo/bidPbancOrd)에서 공고번호를 복원하는 폴백
@@ -552,19 +597,31 @@ export function parseGcalEvent(item: GcalEventItem): ParsedGcalBid {
     event_end: item.end?.dateTime || item.end?.date || null,
     html_link: item.htmlLink || null,
     raw_description: description || null,
+    color_id: item.colorId || null,
+    calendar_tags: extractCalendarTags(item.summary || null),
     ...fields
   }
 }
 
+// colorId='11'(구글 캘린더 상 적색)인 이벤트는 "입찰 제출완료"를 의미하므로,
+// gcal_bid_status.status를 자동으로 '제출완료'로 승격한다.
+//   - 반대 방향(색이 적색이 아니게 되거나 없어짐 -> '제출완료'를 '검토중'으로 강등)은
+//     절대 하지 않는다(실사용자 확인: "적색일 때만 올리고, 반대로 내리는 건 하지 않는
+//     방향"). 이미 '제출완료'인 건, 그리고 사람이 수동으로 '제출완료'로 바꾼 건도
+//     캘린더 색이 사라져도 그대로 유지된다.
+const SUBMITTED_COLOR_ID = '11'
+
 // ------------------------------------------------------------------
 // 캘린더 -> D1(gcal_bids) 동기화 파이프라인
 // ------------------------------------------------------------------
-export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number; synced: number }> {
+export async function syncGcalBids(
+  env: GcalBindings
+): Promise<{ fetched: number; synced: number; promoted: number }> {
   const events = await listCalendarEvents(env)
   const parsed = events.map(parseGcalEvent)
 
   if (parsed.length === 0) {
-    return { fetched: 0, synced: 0 }
+    return { fetched: 0, synced: 0, promoted: 0 }
   }
 
   const stmt = env.DB.prepare(`
@@ -573,8 +630,8 @@ export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number
       bid_method, base_amount, pure_cost, a_value, lower_rate,
       participant_region, joint_region, bid_open_recv_date, bid_deadline,
       agreement_deadline, detail_url, location, event_start, event_end,
-      html_link, raw_description, synced_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      html_link, raw_description, color_id, calendar_tags, synced_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     ON CONFLICT(event_id) DO UPDATE SET
       bid_no = excluded.bid_no,
       bid_ord = excluded.bid_ord,
@@ -599,6 +656,8 @@ export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number
       event_end = excluded.event_end,
       html_link = excluded.html_link,
       raw_description = excluded.raw_description,
+      color_id = excluded.color_id,
+      calendar_tags = excluded.calendar_tags,
       synced_at = datetime('now'),
       updated_at = datetime('now')
   `)
@@ -628,7 +687,9 @@ export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number
       p.event_start,
       p.event_end,
       p.html_link,
-      p.raw_description
+      p.raw_description,
+      p.color_id,
+      p.calendar_tags
     )
   )
 
@@ -638,7 +699,32 @@ export async function syncGcalBids(env: GcalBindings): Promise<{ fetched: number
     await env.DB.batch(batch.slice(i, i + CHUNK))
   }
 
-  return { fetched: events.length, synced: parsed.length }
+  // 캘린더 색상(적색=제출완료)을 gcal_bid_status에 반영한다.
+  //   - 적색인 이벤트만 대상으로 하며, 이미 '제출완료'인 건은 갱신할 필요가 없다.
+  //   - 사람이 아직 상태를 한 번도 안 건드린 이벤트(gcal_bid_status에 행이 없음)도
+  //     INSERT로 '제출완료'를 만들어준다(이때 assignee/memo는 비워둔다).
+  //   - '검토중'으로 되돌리는 로직은 존재하지 않는다(요구사항: 반대로 내리지 않음).
+  const redEventIds = parsed.filter((p) => p.color_id === SUBMITTED_COLOR_ID).map((p) => p.event_id)
+  let promoted = 0
+  if (redEventIds.length > 0) {
+    const promoteStmt = env.DB.prepare(`
+      INSERT INTO gcal_bid_status (event_id, status, updated_at)
+      VALUES (?, '제출완료', datetime('now'))
+      ON CONFLICT(event_id) DO UPDATE SET
+        status = '제출완료',
+        updated_at = datetime('now')
+      WHERE gcal_bid_status.status != '제출완료'
+    `)
+    const promoteBatch = redEventIds.map((id) => promoteStmt.bind(id))
+    for (let i = 0; i < promoteBatch.length; i += CHUNK) {
+      const chunkResults = await env.DB.batch(promoteBatch.slice(i, i + CHUNK))
+      for (const r of chunkResults) {
+        promoted += r.meta?.changes || 0
+      }
+    }
+  }
+
+  return { fetched: events.length, synced: parsed.length, promoted }
 }
 
 // ------------------------------------------------------------------
@@ -657,7 +743,8 @@ export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanne
     `SELECT event_id, raw_description, summary,
             bid_no, bid_ord, title, agency, industry, task_type, bid_method,
             base_amount, pure_cost, a_value, lower_rate, participant_region,
-            joint_region, bid_open_recv_date, bid_deadline, agreement_deadline, detail_url
+            joint_region, bid_open_recv_date, bid_deadline, agreement_deadline, detail_url,
+            calendar_tags
      FROM gcal_bids
      WHERE raw_description IS NOT NULL AND raw_description != ''`
   ).all<Record<string, string | null>>()
@@ -667,6 +754,10 @@ export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanne
     return { scanned: 0, updated: 0 }
   }
 
+  // calendar_tags는 raw_description이 아니라 summary(캘린더 이벤트 제목)에서
+  // 파생되므로 FIELD_KEYS와 별도로 비교한다. 아래 30일 조회범위 밖의 오래된
+  // 이벤트들(예: 이미 마감된 열량계/자동크린넷 건)도, calendar_tags 컬럼을
+  // 새로 추가한 마이그레이션 이후 이 재파싱 한 번으로 태그가 채워지게 한다.
   const FIELD_KEYS: (keyof ParsedGcalFields)[] = [
     'bid_no', 'bid_ord', 'title', 'agency', 'industry', 'task_type', 'bid_method',
     'base_amount', 'pure_cost', 'a_value', 'lower_rate', 'participant_region',
@@ -678,15 +769,17 @@ export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanne
       bid_no = ?, bid_ord = ?, title = ?, agency = ?, industry = ?, task_type = ?,
       bid_method = ?, base_amount = ?, pure_cost = ?, a_value = ?, lower_rate = ?,
       participant_region = ?, joint_region = ?, bid_open_recv_date = ?, bid_deadline = ?,
-      agreement_deadline = ?, detail_url = ?, updated_at = datetime('now')
+      agreement_deadline = ?, detail_url = ?, calendar_tags = ?, updated_at = datetime('now')
     WHERE event_id = ?
   `)
 
   const toUpdate: D1PreparedStatement[] = []
   for (const row of rows) {
     const fresh = parseGcalDescription(row.raw_description || '', row.summary)
-    const changed = FIELD_KEYS.some((k) => (fresh[k] ?? null) !== (row[k] ?? null))
-    if (!changed) continue
+    const freshTags = extractCalendarTags(row.summary)
+    const fieldsChanged = FIELD_KEYS.some((k) => (fresh[k] ?? null) !== (row[k] ?? null))
+    const tagsChanged = (freshTags ?? null) !== (row.calendar_tags ?? null)
+    if (!fieldsChanged && !tagsChanged) continue
 
     toUpdate.push(
       stmt.bind(
@@ -694,7 +787,7 @@ export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanne
         fresh.task_type, fresh.bid_method, fresh.base_amount, fresh.pure_cost,
         fresh.a_value, fresh.lower_rate, fresh.participant_region, fresh.joint_region,
         fresh.bid_open_recv_date, fresh.bid_deadline, fresh.agreement_deadline,
-        fresh.detail_url, row.event_id
+        fresh.detail_url, freshTags, row.event_id
       )
     )
   }
