@@ -560,8 +560,7 @@ app.get('/', (c) => {
             <col class="w-[90px]" />
             <col class="w-[52px]" />
             <col class="w-[100px]" />
-            <col class="w-[108px]" />
-            <col class="w-[108px]" />
+            <col class="w-[190px]" />
             <col class="w-[80px]" />
             <col class="w-auto" />
             <col class="w-[56px]" />
@@ -574,15 +573,14 @@ app.get('/', (c) => {
               <th class="py-2 px-3">지역</th>
               <th class="py-2 px-3">공종</th>
               <th class="py-2 px-3">추정가격</th>
-              <th class="py-2 px-3">입찰개시일</th>
-              <th class="py-2 px-3">입찰마감</th>
+              <th class="py-2 px-3">입찰일</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
               <th class="py-2 px-3 text-center">링크</th>
             </tr>
           </thead>
           <tbody id="bid-list-body" class="divide-y">
-            <tr><td colspan={11} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
+            <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
       </section>
@@ -700,8 +698,7 @@ app.get('/gcal', (c) => {
             <col class="w-[90px]" />
             <col class="w-[52px]" />
             <col class="w-[100px]" />
-            <col class="w-[108px]" />
-            <col class="w-[108px]" />
+            <col class="w-[190px]" />
             <col class="w-[80px]" />
             <col class="w-auto" />
             <col class="w-[56px]" />
@@ -714,15 +711,14 @@ app.get('/gcal', (c) => {
               <th class="py-2 px-3">참가지역</th>
               <th class="py-2 px-3">공종</th>
               <th class="py-2 px-3">기초금액</th>
-              <th class="py-2 px-3">입찰개시일</th>
-              <th class="py-2 px-3">입찰마감</th>
+              <th class="py-2 px-3">입찰일</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
               <th class="py-2 px-3 text-center">링크</th>
             </tr>
           </thead>
           <tbody id="gcal-bid-list-body" class="divide-y">
-            <tr><td colspan={11} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
+            <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
       </section>

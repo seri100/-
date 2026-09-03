@@ -50,6 +50,55 @@ function formatDate(v) {
   return shortenYear(v)
 }
 
+// "YYYY-MM-DD[ HH:MM[:SS]]" 형태의 문자열에서 연/월/일/시/분을 추출한다.
+// 구분자 앞뒤 공백, 전각공백(\u00a0), 초 단위 누락 등 다양한 원본 표기를 허용한다.
+function parseDT(str) {
+  if (!str) return null
+  const s = String(str).replace(/\u00a0/g, ' ')
+  const m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})(?:[^\d]+(\d{1,2})\s*:\s*(\d{1,2}))?/)
+  if (!m) return null
+  return {
+    y: m[1],
+    mo: m[2].padStart(2, '0'),
+    d: m[3].padStart(2, '0'),
+    hh: m[4] ? m[4].padStart(2, '0') : null,
+    mi: m[5] ? m[5].padStart(2, '0') : null
+  }
+}
+
+// 파싱된 날짜 객체를 "YY-MM-DD HH:MM"(연도 포함) 또는 "MM-DD HH:MM"(연도 생략) 형태로 표시한다.
+function fmtDT(o, includeYear) {
+  if (!o) return ''
+  const datePart = includeYear ? `${o.y.slice(-2)}-${o.mo}-${o.d}` : `${o.mo}-${o.d}`
+  return o.hh !== null ? `${datePart} ${o.hh}:${o.mi}` : datePart
+}
+
+// 입찰개시일(bid_open_recv_date)과 입찰마감(bid_deadline)을
+// "26-09-01 00:00 ~ 09-03 10:00" 형태의 단일 "입찰일" 문자열로 병합한다.
+// bid_deadline 원본에 이미 "시작 ~ 종료"가 통째로 들어있는 경우도 처리한다.
+function formatBidPeriod(openRaw, deadlineRaw) {
+  const normalizedDeadline = deadlineRaw ? String(deadlineRaw).replace(/\u00a0/g, ' ') : null
+
+  let startRaw = null
+  let endRaw = null
+  if (normalizedDeadline && normalizedDeadline.includes('~')) {
+    const parts = normalizedDeadline.split('~')
+    startRaw = openRaw || parts[0].trim()
+    endRaw = parts[1] ? parts[1].trim() : null
+  } else {
+    startRaw = openRaw || null
+    endRaw = normalizedDeadline
+  }
+
+  const sObj = parseDT(startRaw)
+  const eObj = parseDT(endRaw)
+
+  if (!sObj && !eObj) return '-'
+  if (!eObj) return fmtDT(sObj, true)
+  if (!sObj) return fmtDT(eObj, true)
+  return `${fmtDT(sObj, true)} ~ ${fmtDT(eObj, false)}`
+}
+
 // 금액 문자열에서 숫자만 추출해 천원 단위로 환산 표시한다.
 // 예: "422,928,000원 (사억이천이백구십이만팔천원)" -> "422,928천원"
 function formatAmountThousand(v) {
@@ -97,8 +146,7 @@ function renderRow(bid) {
     </td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.main_industry)}">${shortIndustry(bid.main_industry)}</td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.estimated_price)}">${formatAmountThousand(bid.estimated_price)}</td>
-    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_open_recv_date)}">${formatDate(bid.bid_open_recv_date)}</td>
-    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_deadline)}">${formatDate(bid.bid_deadline)}</td>
+    <td class="py-2 px-3 whitespace-nowrap text-xs" title="${escapeHtml(bid.bid_open_recv_date)} ~ ${escapeHtml(bid.bid_deadline)}">${formatBidPeriod(bid.bid_open_recv_date, bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
     <td class="py-2 px-3">
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
@@ -126,7 +174,7 @@ function buildQuery() {
 }
 
 async function loadBids() {
-  listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">불러오는 중...</td></tr>'
+  listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">불러오는 중...</td></tr>'
   try {
     const qs = buildQuery()
     const res = await axios.get(`${BID_API_BASE}${qs ? '?' + qs : ''}`)
@@ -134,14 +182,14 @@ async function loadBids() {
 
     listBodyEl.innerHTML = ''
     if (items.length === 0) {
-      listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다.</td></tr>'
+      listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다.</td></tr>'
     } else {
       items.forEach((bid) => listBodyEl.appendChild(renderRow(bid)))
     }
     resultCountEl.textContent = `총 ${items.length}건`
   } catch (err) {
     console.error('입찰 목록 조회 실패:', err)
-    listBodyEl.innerHTML = '<tr><td colspan="11" class="py-8 text-center text-red-400">불러오기에 실패했습니다.</td></tr>'
+    listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-red-400">불러오기에 실패했습니다.</td></tr>'
   }
 }
 
