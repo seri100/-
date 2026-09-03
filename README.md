@@ -14,6 +14,7 @@
   - 라즈베리파이 → Cloudflare 간 데이터 업로드용 REST API 및 동기화 스크립트 제공
   - **[신규] 구글 캘린더 기준 별도 대시보드 (`/gcal`)**: 라즈베리파이 CSV를 거치지 않고 Cloudflare Worker가 Google Calendar API를 직접 호출해 입찰개시 이벤트를 가져와, 동일한 상태/담당자/메모 관리 기능을 제공. 기존 대시보드(`/`)와 완전히 독립된 데이터/테이블 사용
   - **[신규] PC/모바일 아이콘**: 브라우저 탭 파비콘, 모바일 홈화면 추가용 앱 아이콘(iOS/Android), PWA manifest 제공 — 모바일에서 "홈 화면에 추가"로 앱처럼 접근 가능
+  - **[신규] 캘린더 색상/기호 자동 반영 (`/gcal`)**: 구글 캘린더에서 이벤트를 **적색**(colorId=11)으로 표시해두면, "캘린더 동기화" 시 해당 공고의 상태가 자동으로 `검토중` → `제출완료`로 승격됨(반대 방향 자동 강등은 하지 않으며, 이미 사람이 수동으로 설정한 상태/메모는 그대로 보존). 또한 캘린더 제목에 포함된 내부 기호(`ㅇ`=세리공영 참가, `?`=진유 참가, `ㅁ`=협정, `#`=견적제시)와 투찰율(예: `80.495%`) 정보를 파란색 태그로 목록/수정 모달에 자동 표시(사람이 입력하는 기존 메모와는 별도 컬럼이라 서로 덮어쓰지 않음). `&`(백영현 담당자 자동입력)는 이번 구현 범위에서 제외됨
 
 ## URLs
 - **배포 URL (프로덕션)**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com
@@ -54,6 +55,20 @@
 - **⚠️ 구글 캘린더 API 조회 범위 제한**: `listCalendarEvents()`는 `timeMin`(현재 −30일)~`timeMax`(현재 +180일) 범위의 이벤트만 조회합니다. 입찰서접수마감일시가 이미 30일보다 더 지난 오래된 이벤트는 이 범위 밖이라 캘린더 API 응답 자체에 포함되지 않아, `syncGcalBids()`의 upsert 대상이 되지 못합니다.
   - 이 문제를 해결하기 위해 `POST /api/gcal-bids/sync` 호출 시 캘린더 재조회(`syncGcalBids`)에 이어 **`reparseStoredGcalBids()`가 자동으로 함께 실행**됩니다. 이 함수는 캘린더 API를 다시 부르지 않고, DB에 이미 저장된 `raw_description`을 최신 파싱 로직으로 다시 돌려 제목/업종/지역 등 파생 필드만 갱신합니다. 따라서 파싱 로직(키워드 사전 등)을 고친 뒤 "캘린더 동기화" 버튼 한 번만 눌러도 오래된 레코드까지 함께 재분류됩니다.
   - sync 응답에 `reparsed_scanned`(재파싱 대상 전체 건수), `reparsed_updated`(실제 값이 바뀐 건수)가 포함됩니다.
+
+### 캘린더 색상/기호 자동 반영 상세 동작
+- **상태 자동 승격 (단방향)**: 캘린더 이벤트가 **적색**(`colorId='11'`)이면, `POST /api/gcal-bids/sync` 실행 시 해당 공고의 `gcal_bid_status.status`가 자동으로 `제출완료`로 바뀝니다.
+  - 이미 `제출완료`인 건은 갱신하지 않습니다(중복 반영 없음).
+  - **반대 방향(적색이 아니게 되거나 색이 사라짐 → `제출완료`를 `검토중`으로 되돌리는 로직)은 존재하지 않습니다.** 사람이 수동으로 설정한 상태/메모는 캘린더 색이 바뀌어도 그대로 유지됩니다.
+  - sync 응답에 `promoted`(이번 호출로 새로 `제출완료`로 승격된 건수)가 포함됩니다.
+- **캘린더 제목 기호 자동 파싱**: 캘린더 제목(`summary`)에 포함된 아래 기호를 감지해 `calendar_tags` 컬럼에 저장하고, 목록의 "메모" 칸과 상태수정 모달에 파란색 태그(🏷)로 표시합니다.
+  - `ㅇ` → 세리공영 참가
+  - `?` → 진유 참가
+  - `ㅁ` → 협정(전국 공고)
+  - `#` → 견적제시
+  - `NN.NNN` 형태(소수점 3자리, `/` 또는 `,` 앞) → 투찰율 (예: `80.495%`)
+  - `&`(백영현 담당자 자동입력)는 처리 방식이 아직 확정되지 않아 이번 구현에서 제외했습니다.
+  - 이 자동 태그는 팀원이 직접 입력하는 `memo` 자유 텍스트와 완전히 별도 컬럼(`calendar_tags`)에 저장되어 서로 덮어쓰지 않으며, 화면에는 두 정보가 함께(자동 태그 위, 수동 메모 아래) 표시됩니다.
 
 ### curl 예시
 ```bash
@@ -132,6 +147,8 @@ Primary Key는 구글 캘린더 이벤트 id(`event_id`) 그대로 사용합니�
 | location, event_start, event_end, html_link | 캘린더 이벤트 원본 필드(장소/시작/종료/보기링크) |
 | raw_description | 정규화된(HTML→텍스트) description 전문 (파싱 실패 대비 보관) |
 | synced_at, imported_at, updated_at | 마지막 캘린더 동기화 / 최초반영 / 최종갱신 시각 |
+| color_id | 구글 캘린더 이벤트의 원본 색상(colorId). `11`=적색(사람이 캘린더에서 직접 표시)이면 "제출완료"로 자동 승격되는 트리거로 사용 |
+| calendar_tags | 캘린더 제목의 내부 기호/투찰율을 자동 파싱한 텍스트(예: `세리공영 참가 / 진유 참가 / 투찰율 80.495%`). 사람이 입력하는 `gcal_bid_status.memo`와는 완전히 별도 컬럼 |
 
 ### `gcal_bid_status` 테이블 — 구글 캘린더 대시보드용 상태 정보 (신규, 완전 별도)
 | 컬럼 | 설명 |
@@ -143,7 +160,7 @@ Primary Key는 구글 캘린더 이벤트 id(`event_id`) 그대로 사용합니�
 | updated_by, updated_at | 마지막 수정자/수정시각 |
 
 - **Storage**: Cloudflare D1 (로컬 개발 시 `.wrangler/state/v3/d1` 로컬 SQLite)
-- **Migrations**: `migrations/0001_initial_schema.sql`(초기 예제, 더 이상 사용하지 않음 - `backup/legacy-task-api-example/` 참고), `migrations/0002_bid_management.sql`(입찰 관리), `migrations/0003_add_bid_open_date.sql`(입찰개시일 컬럼), `migrations/0004_gcal_bids.sql`(구글 캘린더 대시보드용 신규 테이블)
+- **Migrations**: `migrations/0001_initial_schema.sql`(초기 예제, 더 이상 사용하지 않음 - `backup/legacy-task-api-example/` 참고), `migrations/0002_bid_management.sql`(입찰 관리), `migrations/0003_add_bid_open_date.sql`(입찰개시일 컬럼), `migrations/0004_gcal_bids.sql`(구글 캘린더 대시보드용 신규 테이블), `migrations/0005_gcal_calendar_tags.sql`(`gcal_bids`에 `color_id`, `calendar_tags` 컬럼 추가 — 캘린더 색상/기호 자동 반영용)
 
 ## 데이터 흐름 (라즈베리파이 ↔ Cloudflare)
 
@@ -235,6 +252,7 @@ ck4642060@gmail.com
 - `main_send.py`/`gcal_sync.py`가 이미 하는 지역·공종 필터와 이 앱의 필터 기준이 완전히 동일한지는 실제 데이터로 추가 검증 필요
 - **[신규] 캘린더 내 구버전 이벤트 파싱 한계**: 프로덕션 동기화 기준 310건 중 약 152건은 `main_send.py`의 과거 버전이 만든 완전 구버전 포맷(라벨 없음)이라 제목/기간 등 최소 정보만 파싱됨. 나머지 신포맷(`[입찰개시] ...`) 이벤트는 대부분 필드가 정상 파싱됨 (로컬 검증 기준 157건 중 공고번호 154건, 입찰마감 156건, 발주기관 150건 파싱 성공)
 - **[신규] `/gcal`은 수동 동기화만 지원** — 버튼을 눌러야 최신 캘린더 내용이 반영되며, 자동 주기 동기화(cron 등)는 아직 없음
+- **[신규] `&`(백영현 담당자 자동입력) 처리 미구현** — 캘린더 제목의 `&` 기호는 감지는 되나(다른 기호 파싱 시 함께 확인됨) 담당자 필드 자동 입력 등 구체적 처리는 사용자 확인 후 결정 예정
 
 ## Next Steps
 - 라즈베리파이에 `sync_bids_to_cloudflare.py` 설치 + crontab 등록 (위 안내 참고, `/` 대시보드용)
@@ -242,13 +260,14 @@ ck4642060@gmail.com
 - (선택) 조회/수정 API에 대한 접근 제한 필요 시 Genspark Hosted Access Rules 적용 검토
 - 구버전(라벨 없는) 캘린더 이벤트 약 152건의 데이터 품질을 어느 정도까지 개선할지 사용자와 협의 (현재는 최소 정보만 표시, 기능상 지장은 없음)
 - `/gcal` 자동 주기 동기화(cron 등) 도입 여부 검토 (현재는 수동 버튼만 지원)
+- `&`(백영현 담당자 자동입력) 처리 방식을 사용자와 협의 후 구현 여부 결정
 
 ## Deployment
 - **Platform**: Cloudflare Pages (Genspark 관리형 계정, Workers for Platform)
 - **Tech Stack**: Hono + TypeScript + Cloudflare D1 + TailwindCSS(CDN)
-- **Status**: ✅ `/`(라즈베리파이 기준), `/gcal`(구글 캘린더 기준) 모두 배포 완료. `/gcal`은 원격 D1에 `gcal_bids`/`gcal_bid_status` 테이블 생성(0003/0004 마이그레이션 내용 적용) + `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록 + 재배포까지 완료하고, 배포 직후 "캘린더 동기화" API를 1회 호출해 D1에 310건 초기 적재를 완료함
+- **Status**: ✅ `/`(라즈베리파이 기준), `/gcal`(구글 캘린더 기준) 모두 배포 완료. `/gcal`은 원격 D1에 `gcal_bids`/`gcal_bid_status` 테이블 생성(0003/0004 마이그레이션 내용 적용) + `GCAL_SERVICE_ACCOUNT_JSON`/`GCAL_CALENDAR_ID` 시크릿 등록 + 재배포까지 완료하고, 배포 직후 "캘린더 동기화" API를 1회 호출해 D1에 310건 초기 적재를 완료함. **[신규]** `color_id`/`calendar_tags` 컬럼(0005 마이그레이션) 원격 D1에 적용 완료, 재동기화로 적색 이벤트 126건 자동 "제출완료" 승격 확인(에러율 0%)
 - **배포 URL**: https://edd8d6fe-54a1-40b1-99fe-9fb11271c8a0.vip.gensparksite.com (`/`, `/gcal` 모두 실제 서비스 중)
-- **Last Updated**: 2026-09-02
+- **Last Updated**: 2026-09-03
 
 ### PC/모바일 아이콘 (신규)
 - `public/favicon.ico`(16/32/48 멀티사이즈), `public/static/icons/*.png`(16/32/48/180/192/512), `public/static/manifest.json`(PWA) 추가
