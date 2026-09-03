@@ -100,10 +100,10 @@ function renderRow(bid) {
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_open_recv_date)}">${formatDate(bid.bid_open_recv_date)}</td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_deadline)}">${formatDate(bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
-    <td class="py-2 px-3 max-w-[160px]">
+    <td class="py-2 px-3">
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
     </td>
-    <td class="py-2 px-3">
+    <td class="py-2 px-3 text-center">
       ${bid.detail_url ? `<a href="${escapeHtml(bid.detail_url)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline"><i class="fas fa-external-link-alt"></i></a>` : '-'}
     </td>
   `

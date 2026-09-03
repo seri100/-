@@ -101,11 +101,11 @@ function renderRow(bid) {
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_open_recv_date)}">${formatDate(bid.bid_open_recv_date)}</td>
     <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.bid_deadline)}">${formatDate(bid.bid_deadline)}</td>
     <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
-    <td class="py-2 px-3 max-w-[160px]">
+    <td class="py-2 px-3">
       ${bid.calendar_tags ? `<div class="text-[11px] text-blue-600 mb-0.5" title="${escapeHtml(bid.calendar_tags)}"><i class="fas fa-tag mr-0.5"></i>${escapeHtml(bid.calendar_tags)}</div>` : ''}
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
     </td>
-    <td class="py-2 px-3">
+    <td class="py-2 px-3 text-center">
       ${bid.detail_url ? `<a href="${escapeHtml(bid.detail_url)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline"><i class="fas fa-external-link-alt"></i></a>` : '-'}
     </td>
   `

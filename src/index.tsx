@@ -485,7 +485,7 @@ app.use(renderer)
 // [메인] 입찰 관리 대시보드
 app.get('/', (c) => {
   return c.render(
-    <div id="bid-app" class="max-w-6xl mx-auto py-8 px-4">
+    <div id="bid-app" class="max-w-[1280px] mx-auto py-8 px-4">
       <header class="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
@@ -552,19 +552,19 @@ app.get('/', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[1355px] table-fixed">
+        <table class="w-full text-sm table-fixed">
           <colgroup>
-            <col class="w-[70px]" />
-            <col class="w-[300px]" />
+            <col class="w-[64px]" />
+            <col class="w-[22%]" />
             <col class="w-[110px]" />
-            <col class="w-[160px]" />
-            <col class="w-[60px]" />
-            <col class="w-[115px]" />
-            <col class="w-[150px]" />
-            <col class="w-[150px]" />
-            <col class="w-[70px]" />
-            <col class="w-[120px]" />
-            <col class="w-[50px]" />
+            <col class="w-[90px]" />
+            <col class="w-[52px]" />
+            <col class="w-[100px]" />
+            <col class="w-[108px]" />
+            <col class="w-[108px]" />
+            <col class="w-[80px]" />
+            <col class="w-auto" />
+            <col class="w-[56px]" />
           </colgroup>
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
@@ -578,7 +578,7 @@ app.get('/', (c) => {
               <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
-              <th class="py-2 px-3">링크</th>
+              <th class="py-2 px-3 text-center">링크</th>
             </tr>
           </thead>
           <tbody id="bid-list-body" class="divide-y">
@@ -624,7 +624,7 @@ app.get('/', (c) => {
 // [구글 캘린더 기준] 별도 입찰 관리 대시보드
 app.get('/gcal', (c) => {
   return c.render(
-    <div id="gcal-bid-app" class="max-w-6xl mx-auto py-8 px-4">
+    <div id="gcal-bid-app" class="max-w-[1280px] mx-auto py-8 px-4">
       <header class="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
@@ -692,19 +692,19 @@ app.get('/gcal', (c) => {
       </section>
 
       <section class="bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm min-w-[1355px] table-fixed">
+        <table class="w-full text-sm table-fixed">
           <colgroup>
-            <col class="w-[70px]" />
-            <col class="w-[300px]" />
+            <col class="w-[64px]" />
+            <col class="w-[22%]" />
             <col class="w-[110px]" />
-            <col class="w-[160px]" />
-            <col class="w-[60px]" />
-            <col class="w-[115px]" />
-            <col class="w-[150px]" />
-            <col class="w-[150px]" />
-            <col class="w-[70px]" />
-            <col class="w-[120px]" />
-            <col class="w-[50px]" />
+            <col class="w-[90px]" />
+            <col class="w-[52px]" />
+            <col class="w-[100px]" />
+            <col class="w-[108px]" />
+            <col class="w-[108px]" />
+            <col class="w-[80px]" />
+            <col class="w-auto" />
+            <col class="w-[56px]" />
           </colgroup>
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
@@ -718,7 +718,7 @@ app.get('/gcal', (c) => {
               <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
-              <th class="py-2 px-3">링크</th>
+              <th class="py-2 px-3 text-center">링크</th>
             </tr>
           </thead>
           <tbody id="gcal-bid-list-body" class="divide-y">
