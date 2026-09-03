@@ -2,6 +2,7 @@
 const GCAL_BID_API_BASE = '/api/gcal-bids'
 
 const listBodyEl = document.getElementById('gcal-bid-list-body')
+const listMobileEl = document.getElementById('gcal-bid-list-mobile')
 const resultCountEl = document.getElementById('gcal-result-count')
 
 const filterStatusEl = document.getElementById('gcal-filter-status')
@@ -133,27 +134,27 @@ function renderRow(bid) {
   tr.className = 'hover:bg-gray-50'
 
   tr.innerHTML = `
-    <td class="py-2 px-3">
+    <td class="py-2 px-2 md:px-3">
       <button class="gcal-status-edit-btn" data-event-id="${escapeHtml(bid.event_id)}">
         ${statusBadge(bid.status)}
       </button>
     </td>
-    <td class="py-2 px-3">
+    <td class="py-2 px-2 md:px-3">
       <span class="line-clamp-2" title="${escapeHtml(bid.title)}">${escapeHtml(bid.title)}</span>
     </td>
-    <td class="py-2 px-3 truncate" title="${escapeHtml(bid.agency)}">${escapeHtml(bid.agency)}</td>
-    <td class="py-2 px-3">
+    <td class="hidden md:table-cell py-2 px-3 truncate" title="${escapeHtml(bid.agency)}">${escapeHtml(bid.agency)}</td>
+    <td class="hidden md:table-cell py-2 px-3">
       <span class="line-clamp-2" title="${escapeHtml(bid.participant_region)}">${escapeHtml(bid.participant_region)}</span>
     </td>
-    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.industry)}">${shortIndustry(bid.industry)}</td>
-    <td class="py-2 px-3 whitespace-nowrap" title="${escapeHtml(bid.base_amount)}">${formatAmountThousand(bid.base_amount)}</td>
-    <td class="py-2 px-3 whitespace-nowrap text-xs" title="${escapeHtml(bid.bid_open_recv_date)} ~ ${escapeHtml(bid.bid_deadline)}">${formatBidPeriod(bid.bid_open_recv_date, bid.bid_deadline)}</td>
-    <td class="py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
-    <td class="py-2 px-3">
+    <td class="py-2 px-2 md:px-3 whitespace-nowrap" title="${escapeHtml(bid.industry)}">${shortIndustry(bid.industry)}</td>
+    <td class="py-2 px-2 md:px-3 whitespace-nowrap" title="${escapeHtml(bid.base_amount)}">${formatAmountThousand(bid.base_amount)}</td>
+    <td class="py-2 px-2 md:px-3 whitespace-nowrap text-[11px] md:text-xs" title="${escapeHtml(bid.bid_open_recv_date)} ~ ${escapeHtml(bid.bid_deadline)}">${formatBidPeriod(bid.bid_open_recv_date, bid.bid_deadline)}</td>
+    <td class="hidden md:table-cell py-2 px-3 whitespace-nowrap">${escapeHtml(bid.assignee)}</td>
+    <td class="hidden md:table-cell py-2 px-3">
       ${bid.calendar_tags ? `<div class="text-[11px] text-blue-600 mb-0.5" title="${escapeHtml(bid.calendar_tags)}"><i class="fas fa-tag mr-0.5"></i>${escapeHtml(bid.calendar_tags)}</div>` : ''}
       <span class="line-clamp-2 text-gray-500" title="${escapeHtml(bid.memo)}">${escapeHtml(bid.memo)}</span>
     </td>
-    <td class="py-2 px-3 text-center">
+    <td class="py-2 px-2 md:px-3 text-center">
       ${bid.detail_url ? `<a href="${escapeHtml(bid.detail_url)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline"><i class="fas fa-external-link-alt"></i></a>` : '-'}
     </td>
   `
@@ -162,6 +163,30 @@ function renderRow(bid) {
   editBtn.addEventListener('click', () => openEditModal(bid))
 
   return tr
+}
+
+// 모바일 화면용 카드: 상태/공고명/공종/기초금액/입찰일/링크만 표시
+function renderMobileCard(bid) {
+  const card = document.createElement('div')
+  card.className = 'p-3'
+
+  card.innerHTML = `
+    <div class="flex items-start justify-between gap-2 mb-1">
+      <button class="gcal-status-edit-btn-m flex-shrink-0">${statusBadge(bid.status)}</button>
+      ${bid.detail_url ? `<a href="${escapeHtml(bid.detail_url)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline flex-shrink-0 text-sm"><i class="fas fa-external-link-alt"></i></a>` : '<span class="text-gray-300 text-sm">-</span>'}
+    </div>
+    <p class="text-sm font-medium text-gray-800 mb-1">${escapeHtml(bid.title)}</p>
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+      <span><i class="fas fa-tools mr-1"></i>${shortIndustry(bid.industry)}</span>
+      <span><i class="fas fa-won-sign mr-1"></i>${formatAmountThousand(bid.base_amount)}</span>
+      <span><i class="fas fa-calendar mr-1"></i>${formatBidPeriod(bid.bid_open_recv_date, bid.bid_deadline)}</span>
+    </div>
+  `
+
+  const editBtn = card.querySelector('.gcal-status-edit-btn-m')
+  editBtn.addEventListener('click', () => openEditModal(bid))
+
+  return card
 }
 
 function buildQuery() {
@@ -177,21 +202,26 @@ function buildQuery() {
 
 async function loadBids() {
   listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">불러오는 중...</td></tr>'
+  if (listMobileEl) listMobileEl.innerHTML = '<p class="py-8 text-center text-gray-400 text-sm">불러오는 중...</p>'
   try {
     const qs = buildQuery()
     const res = await axios.get(`${GCAL_BID_API_BASE}${qs ? '?' + qs : ''}`)
     const items = res.data.data || []
 
     listBodyEl.innerHTML = ''
+    if (listMobileEl) listMobileEl.innerHTML = ''
     if (items.length === 0) {
       listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-gray-400">조건에 맞는 공고가 없습니다. (검색 조건을 바꿔보시거나, 데이터가 아직 없다면 우측 상단 "캘린더 동기화" 버튼을 눌러주세요)</td></tr>'
+      if (listMobileEl) listMobileEl.innerHTML = '<p class="py-8 text-center text-gray-400 text-sm">조건에 맞는 공고가 없습니다.</p>'
     } else {
       items.forEach((bid) => listBodyEl.appendChild(renderRow(bid)))
+      if (listMobileEl) items.forEach((bid) => listMobileEl.appendChild(renderMobileCard(bid)))
     }
     resultCountEl.textContent = `총 ${items.length}건`
   } catch (err) {
     console.error('구글 캘린더 입찰 목록 조회 실패:', err)
     listBodyEl.innerHTML = '<tr><td colspan="10" class="py-8 text-center text-red-400">불러오기에 실패했습니다.</td></tr>'
+    if (listMobileEl) listMobileEl.innerHTML = '<p class="py-8 text-center text-red-400 text-sm">불러오기에 실패했습니다.</p>'
   }
 }
 

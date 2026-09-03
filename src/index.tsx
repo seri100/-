@@ -551,7 +551,8 @@ app.get('/', (c) => {
         <span id="result-count" class="text-sm text-gray-400 ml-auto"></span>
       </section>
 
-      <section class="bg-white rounded-lg shadow overflow-x-auto">
+      {/* 데스크톱(md 이상): 전체 10개 컬럼 테이블 */}
+      <section class="hidden md:block bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm table-fixed">
           <colgroup>
             <col class="w-[64px]" />
@@ -583,6 +584,11 @@ app.get('/', (c) => {
             <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
+      </section>
+
+      {/* 모바일(md 미만): 상태/공고명/공종/추정가격/입찰일/링크만 카드로 표시 */}
+      <section class="block md:hidden bg-white rounded-lg shadow divide-y" id="bid-list-mobile">
+        <p class="py-8 text-center text-gray-400 text-sm">불러오는 중...</p>
       </section>
 
       {/* 상태/담당자/메모 수정 모달 */}
@@ -689,7 +695,8 @@ app.get('/gcal', (c) => {
         <span id="gcal-result-count" class="text-sm text-gray-400 ml-auto"></span>
       </section>
 
-      <section class="bg-white rounded-lg shadow overflow-x-auto">
+      {/* 데스크톱(md 이상): 전체 10개 컬럼 테이블 */}
+      <section class="hidden md:block bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm table-fixed">
           <colgroup>
             <col class="w-[64px]" />
@@ -721,6 +728,11 @@ app.get('/gcal', (c) => {
             <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
+      </section>
+
+      {/* 모바일(md 미만): 상태/공고명/공종/기초금액/입찰일/링크만 카드로 표시 */}
+      <section class="block md:hidden bg-white rounded-lg shadow divide-y" id="gcal-bid-list-mobile">
+        <p class="py-8 text-center text-gray-400 text-sm">불러오는 중...</p>
       </section>
 
       {/* 상태/담당자/메모 수정 모달 */}
