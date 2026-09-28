@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { renderer } from './renderer'
-import { syncGcalBids, reparseStoredGcalBids } from './gcal'
+import { syncGcalBids } from './gcal'
 
 type Bindings = {
   DB: D1Database
@@ -14,35 +14,6 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 // API 전용 CORS 허용 (프론트-백엔드 분리 아키텍처를 가정)
 app.use('/api/*', cors())
-
-// ------------------------------------------------------------------
-// 지역명 동의어 매핑
-//   - 캘린더/원본 데이터에 "충북"(축약형)과 "충청북도"(정식명칭)가
-//     혼재되어 있어, 필터 드롭다운 값 하나로 두 형태를 모두 매칭해야 한다.
-// ------------------------------------------------------------------
-const REGION_SYNONYMS: Record<string, string[]> = {
-  '충북': ['충북', '충청북도'],
-  '충남': ['충남', '충청남도'],
-  '전북': ['전북', '전라북도'],
-  '전남': ['전남', '전라남도'],
-  '경북': ['경북', '경상북도'],
-  '경남': ['경남', '경상남도'],
-  '서울': ['서울', '서울특별시'],
-  '부산': ['부산', '부산광역시'],
-  '대구': ['대구', '대구광역시'],
-  '인천': ['인천', '인천광역시'],
-  '광주': ['광주', '광주광역시'],
-  '대전': ['대전', '대전광역시'],
-  '울산': ['울산', '울산광역시'],
-  '세종': ['세종', '세종특별자치시'],
-  '경기': ['경기', '경기도'],
-  '강원': ['강원', '강원도', '강원특별자치도'],
-  '제주': ['제주', '제주도', '제주특별자치도']
-}
-
-function regionVariants(region: string): string[] {
-  return REGION_SYNONYMS[region] || [region]
-}
 
 // ==================================================================
 // REST API: 입찰 관리 (bids + bid_status)
@@ -145,9 +116,7 @@ app.get('/api/bids', async (c) => {
   const { env } = c
   const status = c.req.query('status')       // '검토중' | '제출완료'
   const region = c.req.query('region')
-  const industry = c.req.query('industry')   // '기계' | '소방' | '전기' (실제 컬럼값의 부분 키워드로 매칭)
-  const dateFrom = c.req.query('date_from')  // 'YYYY-MM-DD', 입찰마감일 기준
-  const dateTo = c.req.query('date_to')      // 'YYYY-MM-DD', 입찰마감일 기준
+  const industry = c.req.query('industry')
   const q = c.req.query('q')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
   const offset = parseInt(c.req.query('offset') ?? '0', 10) || 0
@@ -171,24 +140,12 @@ app.get('/api/bids', async (c) => {
     params.push(status)
   }
   if (region) {
-    // "충북"/"충청북도"처럼 축약형·정식명칭이 혼재하므로 동의어를 모두 OR로 매칭
-    const variants = regionVariants(region)
-    query += ` AND (${variants.map(() => `b.region LIKE ?`).join(' OR ')})`
-    params.push(...variants.map((v) => `%${v}%`))
+    query += ` AND b.region LIKE ?`
+    params.push(`%${region}%`)
   }
   if (industry) {
-    // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
-    // 드롭다운의 짧은 키워드(기계/소방/전기)를 그대로 부분일치시킨다.
     query += ` AND b.main_industry LIKE ?`
     params.push(`%${industry}%`)
-  }
-  if (dateFrom) {
-    query += ` AND substr(b.bid_deadline, 1, 10) >= ?`
-    params.push(dateFrom)
-  }
-  if (dateTo) {
-    query += ` AND substr(b.bid_deadline, 1, 10) <= ?`
-    params.push(dateTo)
   }
   if (q) {
     query += ` AND b.title LIKE ?`
@@ -302,17 +259,7 @@ app.post('/api/gcal-bids/sync', async (c) => {
 
   try {
     const result = await syncGcalBids(env)
-    // 구글 캘린더 API는 최근 -30일~+180일 이벤트만 조회하므로, 그보다 오래전에
-    // 마감된 이벤트는 위 syncGcalBids()의 upsert 대상에서 빠진다. 이런 레코드도
-    // 파싱 로직 개선(예: 업종 키워드 추가) 혜택을 받도록, DB에 이미 저장된
-    // raw_description을 최신 로직으로 재파싱해 파생 필드만 갱신한다.
-    const reparsed = await reparseStoredGcalBids(env)
-    return c.json({
-      success: true,
-      ...result,
-      reparsed_scanned: reparsed.scanned,
-      reparsed_updated: reparsed.updated
-    })
+    return c.json({ success: true, ...result })
   } catch (e: any) {
     return c.json({ success: false, error: String(e?.message || e) }, 500)
   }
@@ -324,9 +271,7 @@ app.get('/api/gcal-bids', async (c) => {
   const { env } = c
   const status = c.req.query('status')
   const region = c.req.query('region')
-  const industry = c.req.query('industry')   // '기계' | '소방' | '전기' (실제 컬럼값의 부분 키워드로 매칭)
-  const dateFrom = c.req.query('date_from')  // 'YYYY-MM-DD', 입찰마감일 기준
-  const dateTo = c.req.query('date_to')      // 'YYYY-MM-DD', 입찰마감일 기준
+  const industry = c.req.query('industry')
   const q = c.req.query('q')
   const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
   const offset = parseInt(c.req.query('offset') ?? '0', 10) || 0
@@ -350,47 +295,19 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(status)
   }
   if (region) {
-    // "충북"/"충청북도"처럼 축약형·정식명칭이 혼재하므로 동의어를 모두 OR로 매칭
-    //   - joint_region(공동도급지역)은 더 이상 매칭 대상에 포함하지 않는다.
-    //     공동도급지역이 실질적으로 존재하는 공고는 저장 시점(gcal.ts parseGcalEvent)에
-    //     participant_region이 이미 "전국"으로 정정되므로, 여기서 joint_region까지
-    //     OR로 매칭하면 "세종특별자치시" 같은 공동도급지역 문구 때문에 전국 공고가
-    //     "세종" 지역 필터에도 잘못 노출되는 버그가 있었다(합강중학교 건).
-    //   - participant_region은 "전국/세종49%"처럼 최저 공동도급 비율을 접미사로
-    //     표시하기도 하는데, 이 값도 "세종"이라는 문자열을 포함하므로 위와 같은
-    //     문제가 재발한다. "전국"으로 시작하는 값은 오직 지역필터="전국"일 때만
-    //     매칭되도록 별도 분기 처리한다.
-    if (region === '전국') {
-      query += ` AND b.participant_region LIKE '전국%'`
-    } else {
-      const variants = regionVariants(region)
-      query += ` AND b.participant_region NOT LIKE '전국%' AND (${variants.map(() => `b.participant_region LIKE ?`).join(' OR ')})`
-      for (const v of variants) params.push(`%${v}%`)
-    }
+    query += ` AND (b.participant_region LIKE ? OR b.joint_region LIKE ?)`
+    params.push(`%${region}%`, `%${region}%`)
   }
   if (industry) {
-    // 실제 저장값이 "전문소방시설공사업", "기계설비공사업", "전기설비" 등으로 다양하므로
-    // 드롭다운의 짧은 키워드(기계/소방/전기)를 그대로 부분일치시킨다.
     query += ` AND b.industry LIKE ?`
     params.push(`%${industry}%`)
-  }
-  if (dateFrom) {
-    // bid_deadline은 저장 시점에 "YYYY-MM-DD"로 구분자를 통일하지만, 통일 이전에
-    // 들어온 과거 데이터("YYYY/MM/DD")가 남아있을 수 있어 비교 시점에도 REPLACE로
-    // 방어한다('/' 가 '-'보다 ASCII 값이 커서 문자열 비교 시 날짜가 밀려나는 버그 방지).
-    query += ` AND substr(REPLACE(b.bid_deadline, '/', '-'), 1, 10) >= ?`
-    params.push(dateFrom)
-  }
-  if (dateTo) {
-    query += ` AND substr(REPLACE(b.bid_deadline, '/', '-'), 1, 10) <= ?`
-    params.push(dateTo)
   }
   if (q) {
     query += ` AND b.title LIKE ?`
     params.push(`%${q}%`)
   }
 
-  query += ` ORDER BY REPLACE(b.bid_deadline, '/', '-') ASC LIMIT ? OFFSET ?`
+  query += ` ORDER BY b.bid_deadline ASC LIMIT ? OFFSET ?`
   params.push(limit, offset)
 
   const { results } = await env.DB.prepare(query).bind(...params).all()
@@ -485,7 +402,7 @@ app.use(renderer)
 // [메인] 입찰 관리 대시보드
 app.get('/', (c) => {
   return c.render(
-    <div id="bid-app" class="max-w-[1280px] mx-auto py-8 px-4">
+    <div id="bid-app" class="max-w-6xl mx-auto py-8 px-4">
       <header class="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
@@ -525,18 +442,9 @@ app.get('/', (c) => {
           <label class="block text-xs text-gray-500 mb-1">공종</label>
           <select id="filter-industry" class="border rounded px-2 py-1.5 text-sm">
             <option value="">전체</option>
-            <option value="기계">기계</option>
-            <option value="소방">소방</option>
-            <option value="전기">전기</option>
+            <option value="기계설비">기계설비</option>
+            <option value="소방설비">소방설비</option>
           </select>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">기간(마감일 기준)</label>
-          <div class="flex items-center gap-1">
-            <input id="filter-date-from" type="date" class="border rounded px-2 py-1.5 text-sm" />
-            <span class="text-gray-400">~</span>
-            <input id="filter-date-to" type="date" class="border rounded px-2 py-1.5 text-sm" />
-          </div>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
@@ -551,21 +459,8 @@ app.get('/', (c) => {
         <span id="result-count" class="text-sm text-gray-400 ml-auto"></span>
       </section>
 
-      {/* 데스크톱(lg 이상, 1024px~): 전체 10개 컬럼 테이블. 스마트폰 가로모드(대략 ~930px)까지는 카드형을 유지하기 위해 md 대신 lg 기준 사용 */}
-      <section class="hidden lg:block bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm table-fixed">
-          <colgroup>
-            <col class="w-[64px]" />
-            <col class="w-[22%]" />
-            <col class="w-[110px]" />
-            <col class="w-[90px]" />
-            <col class="w-[52px]" />
-            <col class="w-[100px]" />
-            <col class="w-[190px]" />
-            <col class="w-[80px]" />
-            <col class="w-auto" />
-            <col class="w-[56px]" />
-          </colgroup>
+      <section class="bg-white rounded-lg shadow overflow-x-auto">
+        <table class="w-full text-sm min-w-[900px]">
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
               <th class="py-2 px-3">상태</th>
@@ -574,21 +469,17 @@ app.get('/', (c) => {
               <th class="py-2 px-3">지역</th>
               <th class="py-2 px-3">공종</th>
               <th class="py-2 px-3">추정가격</th>
-              <th class="py-2 px-3">입찰일</th>
+              <th class="py-2 px-3">입찰개시일</th>
+              <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
-              <th class="py-2 px-3 text-center">링크</th>
+              <th class="py-2 px-3">링크</th>
             </tr>
           </thead>
           <tbody id="bid-list-body" class="divide-y">
-            <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
+            <tr><td colspan={11} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
-      </section>
-
-      {/* 모바일/태블릿(lg 미만, ~1023px): 스마트폰 가로모드 포함. 상태/공고명/공종/추정가격/입찰일/링크만 카드로 표시 */}
-      <section class="block lg:hidden bg-white rounded-lg shadow divide-y" id="bid-list-mobile">
-        <p class="py-8 text-center text-gray-400 text-sm">불러오는 중...</p>
       </section>
 
       {/* 상태/담당자/메모 수정 모달 */}
@@ -628,7 +519,7 @@ app.get('/', (c) => {
 // [구글 캘린더 기준] 별도 입찰 관리 대시보드
 app.get('/gcal', (c) => {
   return c.render(
-    <div id="gcal-bid-app" class="max-w-[1280px] mx-auto py-8 px-4">
+    <div id="gcal-bid-app" class="max-w-6xl mx-auto py-8 px-4">
       <header class="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 class="text-2xl md:text-3xl font-bold text-gray-800">
@@ -666,18 +557,9 @@ app.get('/gcal', (c) => {
           <label class="block text-xs text-gray-500 mb-1">공종</label>
           <select id="gcal-filter-industry" class="border rounded px-2 py-1.5 text-sm">
             <option value="">전체</option>
-            <option value="기계">기계</option>
-            <option value="소방">소방</option>
-            <option value="전기">전기</option>
+            <option value="기계설비">기계설비</option>
+            <option value="소방설비">소방설비</option>
           </select>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">기간(마감일 기준)</label>
-          <div class="flex items-center gap-1">
-            <input id="gcal-filter-date-from" type="date" class="border rounded px-2 py-1.5 text-sm" />
-            <span class="text-gray-400">~</span>
-            <input id="gcal-filter-date-to" type="date" class="border rounded px-2 py-1.5 text-sm" />
-          </div>
         </div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
@@ -695,44 +577,27 @@ app.get('/gcal', (c) => {
         <span id="gcal-result-count" class="text-sm text-gray-400 ml-auto"></span>
       </section>
 
-      {/* 데스크톱(lg 이상, 1024px~): 전체 10개 컬럼 테이블. 스마트폰 가로모드(대략 ~930px)까지는 카드형을 유지하기 위해 md 대신 lg 기준 사용 */}
-      <section class="hidden lg:block bg-white rounded-lg shadow overflow-x-auto">
-        <table class="w-full text-sm table-fixed">
-          <colgroup>
-            <col class="w-[64px]" />
-            <col class="w-[22%]" />
-            <col class="w-[110px]" />
-            <col class="w-[90px]" />
-            <col class="w-[52px]" />
-            <col class="w-[100px]" />
-            <col class="w-[190px]" />
-            <col class="w-[80px]" />
-            <col class="w-auto" />
-            <col class="w-[56px]" />
-          </colgroup>
+      <section class="bg-white rounded-lg shadow overflow-x-auto">
+        <table class="w-full text-sm min-w-[900px]">
           <thead class="bg-gray-50 text-gray-600">
             <tr class="text-left border-b">
               <th class="py-2 px-3">상태</th>
               <th class="py-2 px-3">공고명</th>
               <th class="py-2 px-3">발주기관</th>
               <th class="py-2 px-3">참가지역</th>
-              <th class="py-2 px-3">공종</th>
+              <th class="py-2 px-3">업종</th>
               <th class="py-2 px-3">기초금액</th>
-              <th class="py-2 px-3">입찰일</th>
+              <th class="py-2 px-3">입찰개시일</th>
+              <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
               <th class="py-2 px-3">메모</th>
-              <th class="py-2 px-3 text-center">링크</th>
+              <th class="py-2 px-3">링크</th>
             </tr>
           </thead>
           <tbody id="gcal-bid-list-body" class="divide-y">
-            <tr><td colspan={10} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
+            <tr><td colspan={11} class="py-8 text-center text-gray-400">불러오는 중...</td></tr>
           </tbody>
         </table>
-      </section>
-
-      {/* 모바일/태블릿(lg 미만, ~1023px): 스마트폰 가로모드 포함. 상태/공고명/공종/기초금액/입찰일/링크만 카드로 표시 */}
-      <section class="block lg:hidden bg-white rounded-lg shadow divide-y" id="gcal-bid-list-mobile">
-        <p class="py-8 text-center text-gray-400 text-sm">불러오는 중...</p>
       </section>
 
       {/* 상태/담당자/메모 수정 모달 */}
@@ -740,8 +605,7 @@ app.get('/gcal', (c) => {
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
           <h3 class="text-lg font-semibold mb-4">진행상태 수정</h3>
           <input type="hidden" id="gcal-edit-event-id" />
-          <p id="gcal-edit-bid-title" class="text-sm text-gray-600 mb-2 line-clamp-2"></p>
-          <p id="gcal-edit-calendar-tags" class="text-xs text-blue-600 mb-4 hidden"><i class="fas fa-tag mr-1"></i><span></span></p>
+          <p id="gcal-edit-bid-title" class="text-sm text-gray-600 mb-4 line-clamp-2"></p>
 
           <div class="mb-3">
             <label class="block text-xs text-gray-500 mb-1">상태</label>
@@ -765,76 +629,136 @@ app.get('/gcal', (c) => {
           </div>
         </div>
       </div>
-    </div>
-  )
-})
 
-// [GET] /manual - 비개발자용 사용 매뉴얼(MANUAL.md)을 웹페이지로 열람
-//   - 로그인 없이 URL만으로 누구나 열람 가능(전체 공개 라우트)
-//   - Cloudflare Workers는 런타임에 파일을 읽을 수 없으므로, 브라우저에서
-//     정적 파일(/static/manual.md)을 fetch한 뒤 marked.js(CDN)로 렌더링한다.
-app.get('/manual', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>입찰관리 대시보드 - 사용 매뉴얼</title>
-      <link rel="icon" href="/favicon.ico" sizes="any">
-      <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
-      <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
-      <script src="https://cdn.tailwindcss.com"></script>
-      <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-      <style>
-        #manual-content h1 { font-size: 1.8rem; font-weight: 700; margin: 1.2em 0 0.6em; color: #1f2937; }
-        #manual-content h2 { font-size: 1.4rem; font-weight: 700; margin: 1.4em 0 0.5em; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
-        #manual-content h3 { font-size: 1.15rem; font-weight: 600; margin: 1.1em 0 0.4em; color: #374151; }
-        #manual-content p { margin: 0.6em 0; line-height: 1.7; color: #374151; }
-        #manual-content ul, #manual-content ol { margin: 0.6em 0; padding-left: 1.5em; line-height: 1.7; color: #374151; }
-        #manual-content li { margin: 0.3em 0; }
-        #manual-content code { background: #f3f4f6; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
-        #manual-content pre { background: #1f2937; color: #f3f4f6; padding: 1em; border-radius: 8px; overflow-x: auto; margin: 0.8em 0; }
-        #manual-content pre code { background: none; padding: 0; color: inherit; }
-        #manual-content table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
-        #manual-content th, #manual-content td { border: 1px solid #e5e7eb; padding: 0.5em 0.8em; text-align: left; }
-        #manual-content th { background: #f9fafb; font-weight: 600; }
-        #manual-content a { color: #2563eb; text-decoration: underline; }
-        #manual-content hr { margin: 1.5em 0; border-color: #e5e7eb; }
-        #manual-content blockquote { border-left: 4px solid #d1d5db; padding-left: 1em; color: #6b7280; margin: 0.8em 0; }
-      </style>
-    </head>
-    <body class="bg-gray-50">
-      <div class="max-w-3xl mx-auto py-8 px-4">
-        <div class="mb-4 flex items-center justify-between">
-          <a href="/gcal" class="text-sm text-blue-600 hover:underline">
-            <i class="fas fa-arrow-left mr-1"></i>대시보드로 돌아가기
-          </a>
-        </div>
-        <div class="bg-white rounded-lg shadow p-6 md:p-10">
-          <div id="manual-content" class="text-sm md:text-base">
-            <p class="text-gray-400">불러오는 중...</p>
+      {/* ===== 입찰가 계산기 모달 ===== */}
+      <div id="gcal-calc-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-auto flex flex-col max-h-[90vh]">
+          {/* 헤더 */}
+          <div class="flex items-center justify-between px-6 py-4 border-b bg-blue-600 rounded-t-xl">
+            <div>
+              <h3 class="text-white font-bold text-lg">🏛️ 나라장터 입찰가 계산기</h3>
+              <p id="gcal-calc-title" class="text-blue-100 text-xs mt-0.5 line-clamp-1"></p>
+            </div>
+            <button id="gcal-calc-close-btn" class="text-white hover:text-blue-200 text-xl font-bold leading-none">✕</button>
+          </div>
+
+          {/* 스크롤 본문 */}
+          <div class="overflow-y-auto flex-1 px-6 py-4">
+            {/* 공고 정보 요약 */}
+            <div class="bg-blue-50 rounded-lg p-3 mb-4 text-sm flex flex-wrap gap-4">
+              <div>
+                <span class="text-gray-500 text-xs">낙찰방법</span>
+                <p id="gcal-calc-bid-method" class="font-medium text-gray-700"></p>
+              </div>
+            </div>
+
+            {/* 입력 폼 */}
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <div class="col-span-2">
+                <label class="block text-xs font-semibold text-gray-500 mb-1">기초금액 / 예정가격 (원)</label>
+                <input id="gcal-calc-base-amount" type="text" placeholder="예: 500,000,000"
+                  class="border-2 rounded-lg px-3 py-2 w-full text-sm focus:border-blue-400 outline-none" />
+                <p class="text-xs text-gray-400 mt-1">공고의 기초금액 또는 예정가격을 입력하세요 (자동 입력됨)</p>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-500 mb-1">낙찰하한율 (%)</label>
+                <input id="gcal-calc-hahan-rate" type="number" step="0.001" min="60" max="100"
+                  class="border-2 rounded-lg px-3 py-2 w-full text-sm focus:border-blue-400 outline-none" />
+                <p class="text-xs text-gray-400 mt-1">공고 낙찰하한율 (자동 설정)</p>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-500 mb-1">목표 가격점수</label>
+                <select id="gcal-calc-target-score"
+                  class="border-2 rounded-lg px-3 py-2 w-full text-sm focus:border-blue-400 outline-none">
+                  <option value="10">10점 (최고 — 하한율 직상)</option>
+                  <option value="9.5" selected>9.5점 (안전 전략)</option>
+                  <option value="9">9점 (여유 확보)</option>
+                  <option value="custom">직접 입력</option>
+                </select>
+              </div>
+              <div id="gcal-calc-custom-score-group" style="display:none" class="col-span-2">
+                <label class="block text-xs font-semibold text-gray-500 mb-1">목표 가격점수 직접 입력 (점)</label>
+                <input id="gcal-calc-custom-score" type="number" value="9.5" step="0.1" min="0" max="10"
+                  class="border-2 rounded-lg px-3 py-2 w-full text-sm focus:border-blue-400 outline-none" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs font-semibold text-gray-500 mb-1">직접 비율로 계산 (%, 선택)</label>
+                <input id="gcal-calc-direct-rate" type="number" step="0.001" min="60" max="100"
+                  placeholder="예: 92.5"
+                  class="border-2 rounded-lg px-3 py-2 w-full text-sm focus:border-blue-400 outline-none" />
+              </div>
+            </div>
+
+            <button id="gcal-calc-run-btn"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm mb-4">
+              🔢 입찰가 계산
+            </button>
+
+            {/* 결과 박스 */}
+            <div id="gcal-calc-result" class="hidden">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <h4 class="text-blue-700 font-bold text-sm mb-3">📊 계산 결과</h4>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="bg-white rounded-lg p-3 border border-blue-100">
+                    <div class="text-xs text-gray-400">기초금액 (예정가격)</div>
+                    <div id="calc-res-yejung" class="text-base font-bold text-gray-800 mt-1"></div>
+                  </div>
+                  <div class="bg-white rounded-lg p-3 border border-blue-100">
+                    <div class="text-xs text-gray-400">낙찰하한가</div>
+                    <div id="calc-res-hahan" class="text-base font-bold text-gray-800 mt-1"></div>
+                    <div id="calc-res-hahan-rate" class="text-xs text-gray-400 mt-0.5"></div>
+                  </div>
+                  <div class="col-span-2 bg-blue-600 rounded-lg p-3 text-white">
+                    <div class="text-xs text-blue-200">✅ 권장 입찰가 (목표점수 기준)</div>
+                    <div id="calc-res-recommend" class="text-xl font-black mt-1"></div>
+                    <div id="calc-res-recommend-sub" class="text-xs text-blue-200 mt-0.5"></div>
+                  </div>
+                  <div class="col-span-2 bg-white rounded-lg p-3 border border-blue-100">
+                    <div class="text-xs text-gray-400">직접 비율 입찰가</div>
+                    <div id="calc-res-direct" class="text-base font-bold text-gray-800 mt-1"></div>
+                    <div id="calc-res-direct-sub" class="text-xs text-gray-400 mt-0.5"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 시뮬레이션 테이블 */}
+              <div>
+                <h4 class="text-gray-600 font-bold text-sm mb-2">📈 입찰율별 가격점수 시뮬레이션</h4>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm border-collapse">
+                    <thead>
+                      <tr class="bg-gray-50 text-gray-500 text-xs">
+                        <th class="py-2 px-3 border text-center">입찰율</th>
+                        <th class="py-2 px-3 border text-right">입찰금액 (원)</th>
+                        <th class="py-2 px-3 border text-center">가격점수</th>
+                        <th class="py-2 px-3 border text-center">비고</th>
+                      </tr>
+                    </thead>
+                    <tbody id="gcal-calc-rate-tbody" class="divide-y"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 안내 */}
+              <div class="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded text-xs text-yellow-800">
+                ⚠️ 본 계산기는 참고용입니다. 실제 공고문의 낙찰하한율·배점 기준을 반드시 확인하세요.
+                가격점수 = 10 × (낙찰하한율 ÷ 입찰율)
+              </div>
+            </div>
+          </div>
+
+          {/* 하단 버튼 */}
+          <div class="px-6 py-3 border-t flex justify-end">
+            <button id="gcal-calc-close-btn-bottom"
+              class="px-5 py-2 rounded-lg text-sm bg-gray-200 hover:bg-gray-300 font-medium"
+              onclick="document.getElementById('gcal-calc-modal').classList.add('hidden'); document.getElementById('gcal-calc-modal').classList.remove('flex')">
+              닫기
+            </button>
           </div>
         </div>
       </div>
-      <script>
-        fetch('/static/manual.md')
-          .then((r) => {
-            if (!r.ok) throw new Error('failed to load manual.md: ' + r.status)
-            return r.text()
-          })
-          .then((text) => {
-            document.getElementById('manual-content').innerHTML = marked.parse(text)
-          })
-          .catch((err) => {
-            document.getElementById('manual-content').innerHTML =
-              '<p class="text-red-500">매뉴얼을 불러오지 못했습니다: ' + err.message + '</p>'
-          })
-      </script>
-    </body>
-    </html>
-  `)
+    </div>
+  )
 })
 
 export default app
