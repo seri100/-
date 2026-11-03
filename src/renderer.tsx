@@ -35,8 +35,9 @@ export const renderer = jsxRenderer(({ children }, c) => {
       <body class="bg-gray-100">
         {children}
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
-        <script src={scriptSrc}></script>
+        <script type={isGcal ? 'module' : undefined} src={scriptSrc}></script>
       </body>
     </html>
   )
 })
+

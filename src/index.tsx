@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { renderer } from './renderer'
 import { syncGcalBids } from './gcal'
+import { validateWorkflow } from '../public/static/bid-workflow.js'
 
 type Bindings = {
   DB: D1Database
@@ -273,8 +274,8 @@ app.get('/api/gcal-bids', async (c) => {
   const region = c.req.query('region')
   const industry = c.req.query('industry')
   const q = c.req.query('q')
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
-  const offset = parseInt(c.req.query('offset') ?? '0', 10) || 0
+  const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500))
+  const offset = Math.max(0, parseInt(c.req.query('offset') ?? '0', 10) || 0)
 
   let query = `
     SELECT
@@ -283,9 +284,11 @@ app.get('/api/gcal-bids', async (c) => {
       s.assignee,
       s.memo,
       s.updated_by,
-      s.updated_at AS status_updated_at
+      s.updated_at AS status_updated_at,
+      w.workflow_json, w.updated_at AS workflow_updated_at
     FROM gcal_bids b
     LEFT JOIN gcal_bid_status s ON b.event_id = s.event_id
+    LEFT JOIN gcal_bid_workflow w ON b.event_id = w.event_id
     WHERE 1=1
   `
   const params: any[] = []
@@ -307,12 +310,33 @@ app.get('/api/gcal-bids', async (c) => {
     params.push(`%${q}%`)
   }
 
-  query += ` ORDER BY b.bid_deadline ASC LIMIT ? OFFSET ?`
+  const countQuery = 'SELECT COUNT(*) AS total FROM (' + query + ')'
+  const total = await env.DB.prepare(countQuery).bind(...params).first<{ total: number }>()
+  query += ` ORDER BY b.bid_deadline ASC, b.event_id ASC LIMIT ? OFFSET ?`
   params.push(limit, offset)
 
   const { results } = await env.DB.prepare(query).bind(...params).all()
 
-  return c.json({ success: true, data: results, count: results.length })
+  return c.json({ success: true, data: results, count: results.length, total: total?.total ?? 0 })
+})
+
+// Company-specific progress is kept separate from calendar-derived status.
+app.put('/api/gcal-bids/:event_id/workflow', async (c) => {
+  const id = c.req.param('event_id')
+  const body = await c.req.json().catch(() => null)
+  if (!validateWorkflow(body?.workflow)) return c.json({ success: false, error: '업무 입력값을 확인하세요.' }, 400)
+  const bid = await c.env.DB.prepare('SELECT 1 FROM gcal_bids WHERE event_id = ?').bind(id).first()
+  if (!bid) return c.json({ success: false, error: 'Bid not found' }, 404)
+  const previous = typeof body.expected === 'string' ? body.expected : null
+  const json = JSON.stringify(body.workflow)
+  // Compare-and-swap in a single statement prevents stale editors overwriting progress.
+  const result = previous === null
+    ? await c.env.DB.prepare(`INSERT INTO gcal_bid_workflow (event_id, workflow_json)
+        VALUES (?, ?) ON CONFLICT(event_id) DO NOTHING`).bind(id, json).run()
+    : await c.env.DB.prepare(`UPDATE gcal_bid_workflow SET workflow_json = ?, updated_at = datetime('now')
+        WHERE event_id = ? AND workflow_json = ?`).bind(json, id, previous).run()
+  if (!result.meta.changes) return c.json({ success: false, error: '다른 담당자가 수정했습니다. 목록을 새로 불러온 후 확인해 주세요.' }, 409)
+  return c.json({ success: true })
 })
 
 // [GET] /api/gcal-bids/:event_id - 단일 조회
@@ -327,9 +351,11 @@ app.get('/api/gcal-bids/:event_id', async (c) => {
       s.assignee,
       s.memo,
       s.updated_by,
-      s.updated_at AS status_updated_at
+      s.updated_at AS status_updated_at,
+      w.workflow_json, w.updated_at AS workflow_updated_at
     FROM gcal_bids b
     LEFT JOIN gcal_bid_status s ON b.event_id = s.event_id
+    LEFT JOIN gcal_bid_workflow w ON b.event_id = w.event_id
     WHERE b.event_id = ?
   `).bind(eventId).first()
 
@@ -385,9 +411,11 @@ app.put('/api/gcal-bids/:event_id/status', async (c) => {
       s.assignee,
       s.memo,
       s.updated_by,
-      s.updated_at AS status_updated_at
+      s.updated_at AS status_updated_at,
+      w.workflow_json, w.updated_at AS workflow_updated_at
     FROM gcal_bids b
     LEFT JOIN gcal_bid_status s ON b.event_id = s.event_id
+    LEFT JOIN gcal_bid_workflow w ON b.event_id = w.event_id
     WHERE b.event_id = ?
   `).bind(eventId).first()
 
@@ -527,7 +555,7 @@ app.get('/gcal', (c) => {
             구글 캘린더 입찰 대시보드
           </h1>
           <p class="text-gray-500 mt-1 text-sm">
-            구글 캘린더(ck-bid 서비스 계정)에 등록된 입찰개시 이벤트를 직접 가져와 진행상태(검토중/제출완료)를 관리합니다.
+            마감 일정과 회사별 협정·투찰, 업체별 가격제시 업무를 함께 확인합니다.
           </p>
         </div>
         <a href="/" class="text-sm text-blue-600 hover:underline">
@@ -535,6 +563,8 @@ app.get('/gcal', (c) => {
         </a>
       </header>
 
+      <div id="gcal-work-summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" aria-label="업무 바로보기"></div>
+      <p id="gcal-sync-status" role="status" class="text-sm text-gray-500 mb-3"></p>
       <section id="gcal-filter-bar" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div>
           <label class="block text-xs text-gray-500 mb-1">상태</label>
@@ -558,9 +588,13 @@ app.get('/gcal', (c) => {
           <select id="gcal-filter-industry" class="border rounded px-2 py-1.5 text-sm">
             <option value="">전체</option>
             <option value="기계설비">기계설비</option>
-            <option value="소방설비">소방설비</option>
+            <option value="소방">소방</option><option value="전기">전기</option><option value="통신">통신</option>
           </select>
         </div>
+        <div><label for="gcal-company" class="block text-xs text-gray-500 mb-1">참가회사</label>
+          <select id="gcal-company" class="border rounded px-2 py-1.5 text-sm"><option value="">전체</option><option value="seri">세리공영</option><option value="jinyu">진유</option></select></div>
+        <div><label for="gcal-period" class="block text-xs text-gray-500 mb-1">조회 범위</label>
+          <select id="gcal-period" class="border rounded px-2 py-1.5 text-sm"><option value="active">진행 중·마감 미확인</option><option value="all">전체·지난 공고</option></select></div>
         <div class="flex-1 min-w-[160px]">
           <label class="block text-xs text-gray-500 mb-1">공고명 검색</label>
           <input id="gcal-filter-q" type="text" placeholder="공고명 키워드" class="border rounded px-2 py-1.5 text-sm w-full" />
@@ -587,10 +621,10 @@ app.get('/gcal', (c) => {
               <th class="py-2 px-3">참가지역</th>
               <th class="py-2 px-3">업종</th>
               <th class="py-2 px-3">기초금액</th>
-              <th class="py-2 px-3">입찰개시일</th>
+              <th class="py-2 px-3">협정마감</th>
               <th class="py-2 px-3">입찰마감</th>
               <th class="py-2 px-3">담당자</th>
-              <th class="py-2 px-3">메모</th>
+              <th class="py-2 px-3">남은 업무·메모</th>
               <th class="py-2 px-3">링크</th>
             </tr>
           </thead>
@@ -602,7 +636,7 @@ app.get('/gcal', (c) => {
 
       {/* 상태/담당자/메모 수정 모달 */}
       <div id="gcal-edit-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="진행상태 수정">
           <h3 class="text-lg font-semibold mb-4">진행상태 수정</h3>
           <input type="hidden" id="gcal-edit-event-id" />
           <p id="gcal-edit-bid-title" class="text-sm text-gray-600 mb-4 line-clamp-2"></p>
@@ -623,6 +657,7 @@ app.get('/gcal', (c) => {
             <textarea id="gcal-edit-memo" rows={3} placeholder="특이사항 메모" class="border rounded px-3 py-2 w-full text-sm"></textarea>
           </div>
 
+          <div id="gcal-work-editor" class="border-t pt-4 mb-4"></div>
           <div class="flex justify-end gap-2">
             <button id="gcal-edit-cancel-btn" class="px-4 py-2 rounded text-sm bg-gray-200 hover:bg-gray-300">취소</button>
             <button id="gcal-edit-save-btn" class="px-4 py-2 rounded text-sm bg-purple-600 text-white hover:bg-purple-700">저장</button>
@@ -762,3 +797,4 @@ app.get('/gcal', (c) => {
 })
 
 export default app
+

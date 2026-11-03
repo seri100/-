@@ -398,7 +398,7 @@ export interface ParsedGcalBid {
 // 투찰율은 "숫자.숫자숫자숫자" 뒤에 '/' 또는 ',' 가 바로(공백 허용) 오는 형태로만
 // 나타난다(예: "80.495/전주동북초...", "84.245 /「화성푸드...」"). 단순 일자/코드
 // 번호(예: "3/4", "26-충-공-3B")는 소수점이 없어 이 정규식에 걸리지 않는다.
-const BID_RATE_RE = /(\d{2,3}\.\d{3})\s*%?(?=\s*[/,])/g
+const BID_RATE_RE = /(\d{2,3}\.\d{3})\s*%?(?=\s*(?:[/,]|$))/g
 
 function extractBidRates(summaryRaw: string): string[] {
   const rates: string[] = []
@@ -414,10 +414,13 @@ function extractCalendarTags(summaryRaw: string | null): string | null {
   const notes: string[] = []
   if (summaryRaw.includes('ㅇ')) notes.push('세리공영 참가')
   if (summaryRaw.includes('?')) notes.push('진유 참가')
-  if (summaryRaw.includes('ㅁ')) notes.push('협정(전국 공고)')
-  if (summaryRaw.includes('#')) notes.push('견적제시')
+  if (summaryRaw.includes('ㅁ')) notes.push('지역공동도급 대상')
+  if (summaryRaw.includes('#')) notes.push('가격제시 대상')
+  if (summaryRaw.includes('◆')) notes.push('전기공사업')
+  if (summaryRaw.includes('@')) notes.push('통신공사업')
+  if (summaryRaw.includes('&')) notes.push('관리자 yh 표시')
   const rates = extractBidRates(summaryRaw)
-  if (rates.length > 0) notes.push(`투찰율 ${rates.join('%, ')}%`)
+  if (rates.length > 0) notes.push(`입찰 하한율 ${rates.join('%, ')}%`)
   return notes.length > 0 ? notes.join(' / ') : null
 }
 
@@ -799,3 +802,4 @@ export async function reparseStoredGcalBids(env: GcalBindings): Promise<{ scanne
 
   return { scanned: rows.length, updated: toUpdate.length }
 }
+
