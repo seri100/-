@@ -1,4 +1,5 @@
 import { signals, readWorkflow, workState, deadlineTime } from './bid-workflow.js'
+import { isArchived, renderArchiveControls } from './bid-archive.js'
 // 구글 캘린더 기준 입찰 관리 대시보드 프론트엔드 스크립트
 const GCAL_BID_API_BASE = '/api/gcal-bids'
 let allBids = []
@@ -153,7 +154,8 @@ function matchesQuick(bid, filter) {
 function renderBids() {
   const company = document.getElementById('gcal-company').value
   const activeOnly = document.getElementById('gcal-period').value === 'active'
-  const base = allBids.filter(b => !company || readWorkflow(b.workflow_json, b.summary || b.title)[company].participating)
+  renderArchiveControls(allBids)
+  const base = allBids.filter(b => !isArchived(b) && (!company || readWorkflow(b.workflow_json, b.summary || b.title)[company].participating))
   const items = base.filter(b => (!activeOnly || workState(b).active) && matchesQuick(b, quickFilter))
     .sort((a, b) => (deadlineTime(a.bid_deadline) ?? Infinity) - (deadlineTime(b.bid_deadline) ?? Infinity))
   const summary = document.getElementById('gcal-work-summary')
@@ -165,7 +167,7 @@ function renderBids() {
     button.setAttribute('aria-pressed', String(quickFilter === key))
     const count = base.filter(b => key === 'active' ? workState(b).active : matchesQuick(b, key)).length
     button.innerHTML = '<span class="text-xs text-gray-500">' + label + '</span><strong class="block text-2xl mt-1">' + count + '</strong>'
-    button.addEventListener('click', () => { quickFilter = key; document.getElementById('gcal-period').value = key === 'active' ? 'active' : 'all'; renderBids() })
+    button.addEventListener('click', () => { quickFilter = quickFilter === key ? 'all' : key; renderBids() })
     summary.append(button)
   }
   listBodyEl.replaceChildren()
